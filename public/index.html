@@ -51,6 +51,23 @@
     .inp:focus { border-color: #2c5364; }
     .btn-gold { width: 100%; padding: 16px; background: linear-gradient(135deg, #f7b733, #fc4a1a); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
     .btn-gold:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(252,74,26,0.3); }
+    .btn-gold[disabled] { opacity: 0.7; cursor: wait; transform: none; box-shadow: none; }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 15px;
+      background: #f0f7fa;
+      color: #2c5364;
+      border: 2px solid #2c5364;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 12px;
+    }
+    .btn-secondary:hover { background: #2c5364; color: white; }
+
     .fine-card { font-size: 11px; color: #aaa; text-align: center; margin-top: 10px; }
 
     .result-wrap { max-width: 680px; margin: 0 auto; }
@@ -65,15 +82,39 @@
     .stat-lbl { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
     .result-card { background: white; border-radius: 20px; padding: 24px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
     .result-card h3 { font-size: 18px; font-weight: 700; color: #1a2a3a; margin-bottom: 12px; }
-    .checklist { display: flex; flex-direction: column; gap: 8px; }
     .check-item { display: flex; gap: 10px; font-size: 14px; color: #444; line-height: 1.5; }
     .check-item span:first-child { color: #2c5364; flex-shrink: 0; font-weight: 700; }
     .cta-card { background: linear-gradient(135deg, #fffbf0, #fff8e0); border: 2px solid #f7b733; border-radius: 20px; padding: 28px 24px; text-align: center; margin-bottom: 16px; }
-    .price-old { font-size: 14px; color: #aaa; text-decoration: line-through; margin-bottom: 4px; }
     .price-new { font-size: 42px; font-weight: 900; color: #1a2a3a; margin-bottom: 6px; }
     .price-perks { font-size: 13px; color: #27ae60; font-weight: 600; margin-bottom: 20px; }
     .secure { font-size: 12px; color: #aaa; margin-top: 10px; }
     .disclaimer { font-size: 11px; color: #aaa; line-height: 1.6; padding: 16px; background: white; border-radius: 12px; }
+
+    .status-card {
+      max-width: 560px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      padding: 32px 24px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+    .status-card .icon {
+      font-size: 52px;
+      margin-bottom: 12px;
+    }
+    .status-card h2 {
+      font-size: 26px;
+      font-weight: 800;
+      color: #1a2a3a;
+      margin-bottom: 10px;
+    }
+    .status-card p {
+      font-size: 15px;
+      color: #666;
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
 
     .loading-wrap { max-width: 520px; margin: 0 auto; }
     .loading-card { background: white; border-radius: 20px; padding: 48px 24px; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,0.3); }
@@ -96,6 +137,12 @@
     .btn-restart { flex: 1; padding: 14px; background: white; border: 2px solid #ddd; color: #888; border-radius: 12px; font-size: 14px; cursor: pointer; }
     .bp-preview { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
     .bp-iframe { width: 100%; height: 600px; border: none; }
+
+    @media (max-width: 600px) {
+      .stats { flex-direction: column; align-items: center; }
+      .bp-actions { flex-direction: column; }
+      .btn-download, .btn-print, .btn-restart { flex: none; width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -112,23 +159,23 @@
       <div class="check"><span>✓</span> 3 minutes</div>
       <div class="check"><span>✓</span> Personalized result</div>
     </div>
-    <button class="btn-start" onclick="startQuiz()">Find My Retirement Match →</button>
-    <p class="fine">Free. No credit card required. Educational purposes only.</p>
+    <button class="btn-start" onclick="startQuiz()">Start My Free Quiz →</button>
+    <div class="fine">Educational content only. Not financial, tax, or legal advice.</div>
   </div>
 </div>
 
 <!-- QUIZ -->
 <div id="screen-quiz" class="screen">
   <div class="quiz-wrap">
-    <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
     <div class="q-meta">
-      <div class="q-section" id="q-section"></div>
-      <div class="q-num" id="q-num"></div>
+      <div class="q-section" id="q-section">About You</div>
+      <div class="q-num" id="q-num">1 of 15</div>
     </div>
     <div class="q-text" id="q-text"></div>
     <div class="options" id="q-options"></div>
     <button class="btn-next" id="btn-next" onclick="nextQuestion()">Next →</button>
-    <p class="disc-small">For educational purposes only. Not financial advice.</p>
+    <div class="disc-small">This is a quick educational matching tool, not personalized financial advice.</div>
   </div>
 </div>
 
@@ -136,9 +183,8 @@
 <div id="screen-optin" class="screen">
   <div class="center-wrap">
     <div class="card">
-      <div style="font-size:44px;text-align:center;margin-bottom:14px">🎯</div>
-      <h2 style="text-align:center">Your Results Are Ready</h2>
-      <p style="text-align:center">We've matched you with your top retirement destination and estimated your potential monthly savings.</p>
+      <h2>Your result is ready 🎉</h2>
+      <p>We’ve matched you with your top retirement destination and estimated your potential monthly savings.</p>
       <div class="teaser-box">🔒 Enter your name and email to unlock your free personalized results — including your top 3 destination matches and estimated monthly savings.</div>
       <input class="inp" type="text" id="optin-name" placeholder="Your first name"/>
       <input class="inp" type="email" id="optin-email" placeholder="Your email address"/>
@@ -163,6 +209,7 @@
         <div><div class="stat-val" id="stat-cities">Tampa, Sarasota</div><div class="stat-lbl">Top cities to explore</div></div>
       </div>
     </div>
+
     <div class="result-card">
       <h3>📋 What Your Full Blueprint Includes</h3>
       <div style="background:#e8f8f0;border-radius:10px;padding:14px 18px;margin-bottom:12px;">
@@ -183,14 +230,20 @@
         <div class="check-item"><span>✓</span><span>Questions to ask your CPA, realtor, and financial planner</span></div>
       </div>
     </div>
+
     <div class="cta-card">
       <div style="font-size:13px;color:#27ae60;font-weight:700;margin-bottom:6px;">🎁 Your free preview is ready — upgrade to unlock all 12 sections</div>
       <div class="price-new">$49</div>
       <div style="font-size:13px;color:#e74c3c;font-weight:700;margin-bottom:4px;">One-time payment only · No subscription · No hidden fees</div>
       <div class="price-perks">✓ 30-day money-back guarantee &nbsp; ✓ Instant delivery</div>
-      <a href="https://buy.stripe.com/cNibJ2f8yat49vd7mC5sA00" class="btn-gold" style="display:block;text-align:center;text-decoration:none;">Unlock Full Blueprint — $49 →</a>
+
+      <button class="btn-secondary" onclick="generateBlueprint()">Preview My Free Blueprint</button>
+      <button id="checkout-btn" class="btn-gold" onclick="startCheckout()">Unlock Full Blueprint — $49 →</button>
+
       <p class="secure">🔒 Secure checkout via Stripe</p>
+      <div id="checkout-error" style="display:none;color:#c0392b;font-size:13px;margin-top:10px;"></div>
     </div>
+
     <div class="disclaimer">
       <strong>Educational Disclaimer:</strong> This quiz result is for general educational and informational purposes only. Not personalized financial, investment, tax, legal, or retirement advice. Savings estimates are general illustrations based on publicly available data. Always consult a licensed financial advisor, CPA, and attorney before making major financial decisions. We are not a registered investment adviser.
     </div>
@@ -214,14 +267,14 @@
   </div>
 </div>
 
-<!-- BLUEPRINT PDF -->
+<!-- BLUEPRINT PREVIEW -->
 <div id="screen-blueprint" class="screen">
   <div class="bp-wrap">
     <div class="bp-header">
       <div style="display:inline-block;background:#e8f8e8;color:#27ae60;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">✓ Your Blueprint Is Ready</div>
       <h2 id="bp-title">Your Retirement Relocation Blueprint</h2>
       <div class="bp-actions">
-        <button class="btn-download" onclick="downloadPDF()">⬇️ Download PDF</button>
+        <button class="btn-download" onclick="downloadPDF()">⬇️ Download Preview</button>
         <button class="btn-print" onclick="printBlueprint()">🖨️ Print</button>
         <button class="btn-restart" onclick="startOver()">Start Over</button>
       </div>
@@ -229,6 +282,26 @@
     <div class="bp-preview">
       <iframe id="bp-iframe" class="bp-iframe"></iframe>
     </div>
+  </div>
+</div>
+
+<!-- PAID STATUS -->
+<div id="screen-paid" class="screen">
+  <div class="status-card">
+    <div class="icon">✅</div>
+    <h2>Payment Received</h2>
+    <p>Your payment was successful. Your full report is now being processed through the fulfillment workflow.</p>
+    <button class="btn-gold" onclick="startOver()">Return to Home</button>
+  </div>
+</div>
+
+<!-- CANCELED STATUS -->
+<div id="screen-canceled" class="screen">
+  <div class="status-card">
+    <div class="icon">↩️</div>
+    <h2>Checkout Canceled</h2>
+    <p>No worries — your results are still here. You can review your free preview or come back to unlock the full blueprint anytime.</p>
+    <button class="btn-gold" onclick="showScreen('result')">Back to My Results</button>
   </div>
 </div>
 
@@ -252,136 +325,325 @@ var QUESTIONS = [
 ];
 
 var DEST = {
-  "Florida":{emoji:"🌴",name:"Florida",cities:"Tampa, Sarasota, or Jacksonville",savings:"$2,800–$3,900/mo",tax:"$8,000–$22,000/yr",headline:"No state income tax, lower cost of living, and warm winters year-round."},
-  "The Carolinas":{emoji:"🌄",name:"The Carolinas",cities:"Charlotte, Raleigh, or Asheville",savings:"$1,800–$2,800/mo",tax:"$5,000–$15,000/yr",headline:"Four seasons, lower taxes, and a rapidly growing retiree community."},
-  "Tennessee":{emoji:"🎸",name:"Tennessee",cities:"Nashville, Chattanooga, or Knoxville",savings:"$2,000–$3,200/mo",tax:"$7,000–$18,000/yr",headline:"Zero state income tax, low cost of living, and a friendly culture."},
-  "Delaware (close to Northeast)":{emoji:"🦅",name:"Delaware",cities:"Rehoboth Beach or Wilmington",savings:"$1,200–$2,200/mo",tax:"$4,000–$12,000/yr",headline:"Closest tax haven to NYC — stay near family while cutting your tax bill."},
-  "default":{emoji:"🌞",name:"Florida or the Carolinas",cities:"Tampa, Sarasota, or Charlotte",savings:"$2,200–$3,600/mo",tax:"$6,000–$20,000/yr",headline:"Both offer zero or low state income tax and a significantly lower cost of living."}
+  "Florida": {emoji:"🌴",name:"Florida",cities:"Tampa, Sarasota, or Jacksonville",savings:"$2,800–$3,900/mo",tax:"$8,000–$22,000/yr",headline:"No state income tax, lower cost of living, and warm winters year-round."},
+  "The Carolinas": {emoji:"🌄",name:"The Carolinas",cities:"Charlotte, Raleigh, or Asheville",savings:"$1,800–$2,800/mo",tax:"$5,000–$15,000/yr",headline:"Four seasons, lower taxes, and a rapidly growing retiree community."},
+  "Tennessee": {emoji:"🎸",name:"Tennessee",cities:"Nashville, Chattanooga, or Knoxville",savings:"$2,000–$3,200/mo",tax:"$7,000–$18,000/yr",headline:"Zero state income tax, low cost of living, and a friendly culture."},
+  "Delaware (close to Northeast)": {emoji:"🦅",name:"Delaware",cities:"Rehoboth Beach or Wilmington",savings:"$1,200–$2,200/mo",tax:"$4,000–$12,000/yr",headline:"Closest tax haven to NYC — stay near family while cutting your tax bill."},
+  "default": {emoji:"🌞",name:"Florida or the Carolinas",cities:"Tampa, Sarasota, or Charlotte",savings:"$2,200–$3,600/mo",tax:"$6,000–$20,000/yr",headline:"Both offer zero or low state income tax and a significantly lower cost of living."}
 };
 
-var answers={}, currentQ=0, selected=null, userName="", pdfHTMLContent="";
+var answers = {};
+var currentQ = 0;
+var selected = null;
+var userName = "";
+var userEmail = "";
+var pdfHTMLContent = "";
 
 function showScreen(id){
-  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
-  document.getElementById('screen-'+id).classList.add('active');
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.getElementById('screen-' + id).classList.add('active');
   window.scrollTo(0,0);
 }
 
-function startQuiz(){currentQ=0;answers={};selected=null;renderQuestion();showScreen('quiz');}
-
-function renderQuestion(){
-  var q=QUESTIONS[currentQ];
-  document.getElementById('progress-fill').style.width=((currentQ/QUESTIONS.length)*100)+'%';
-  document.getElementById('q-section').textContent=q.section;
-  document.getElementById('q-num').textContent=(currentQ+1)+' of '+QUESTIONS.length;
-  document.getElementById('q-text').textContent=q.q;
-  selected=null;
-  var btn=document.getElementById('btn-next');
-  btn.classList.remove('ready');
-  btn.textContent=currentQ<QUESTIONS.length-1?'Next →':'See My Results →';
-  var html='';
-  q.opts.forEach(function(opt){
-    html+='<button class="opt-btn" onclick="selectOpt(this,\''+opt.replace(/'/g,"\\'")+'\')">'
-      +'<div class="opt-dot">○</div>'+opt+'</button>';
-  });
-  document.getElementById('q-options').innerHTML=html;
+function startQuiz(){
+  currentQ = 0;
+  answers = {};
+  selected = null;
+  renderQuestion();
+  showScreen('quiz');
 }
 
-function selectOpt(el,val){
-  document.querySelectorAll('.opt-btn').forEach(function(b){b.classList.remove('selected');b.querySelector('.opt-dot').textContent='○';});
-  el.classList.add('selected');el.querySelector('.opt-dot').textContent='●';
-  selected=val;document.getElementById('btn-next').classList.add('ready');
+function renderQuestion(){
+  var q = QUESTIONS[currentQ];
+  document.getElementById('progress-fill').style.width = ((currentQ / QUESTIONS.length) * 100) + '%';
+  document.getElementById('q-section').textContent = q.section;
+  document.getElementById('q-num').textContent = (currentQ + 1) + ' of ' + QUESTIONS.length;
+  document.getElementById('q-text').textContent = q.q;
+  selected = null;
+
+  var btn = document.getElementById('btn-next');
+  btn.classList.remove('ready');
+  btn.textContent = currentQ < QUESTIONS.length - 1 ? 'Next →' : 'See My Results →';
+
+  var html = '';
+  q.opts.forEach(function(opt){
+    html += '<button class="opt-btn" onclick="selectOpt(this,\'' + opt.replace(/'/g,"\\'") + '\')">'
+      + '<div class="opt-dot">○</div>' + opt + '</button>';
+  });
+
+  document.getElementById('q-options').innerHTML = html;
+}
+
+function selectOpt(el, val){
+  document.querySelectorAll('.opt-btn').forEach(function(b){
+    b.classList.remove('selected');
+    b.querySelector('.opt-dot').textContent = '○';
+  });
+  el.classList.add('selected');
+  el.querySelector('.opt-dot').textContent = '●';
+  selected = val;
+  document.getElementById('btn-next').classList.add('ready');
 }
 
 function nextQuestion(){
-  if(!selected)return;
-  answers[QUESTIONS[currentQ].key]=selected;
-  if(currentQ<QUESTIONS.length-1){currentQ++;renderQuestion();}
-  else{showScreen('optin');}
+  if(!selected) return;
+  answers[QUESTIONS[currentQ].key] = selected;
+  if(currentQ < QUESTIONS.length - 1){
+    currentQ++;
+    renderQuestion();
+  } else {
+    showScreen('optin');
+  }
 }
 
 function submitOptin(){
-  var name=document.getElementById('optin-name').value.trim();
-  var email=document.getElementById('optin-email').value.trim();
-  var errEl=document.getElementById('optin-error');
-  if(!name||!email){errEl.textContent='Please enter your name and email.';errEl.style.display='block';return;}
-  if(!email.includes('@')){errEl.textContent='Please enter a valid email address.';errEl.style.display='block';return;}
-  errEl.style.display='none';userName=name;showResultTeaser();
+  var name = document.getElementById('optin-name').value.trim();
+  var email = document.getElementById('optin-email').value.trim();
+  var errEl = document.getElementById('optin-error');
+
+  if(!name || !email){
+    errEl.textContent = 'Please enter your name and email.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  if(!email.includes('@')){
+    errEl.textContent = 'Please enter a valid email address.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  errEl.style.display = 'none';
+  userName = name;
+  userEmail = email;
+  showResultTeaser();
 }
 
 function getDestData(){
-  var d=answers.destination;
-  if(d&&DEST[d])return DEST[d];
-  if(answers.lifestyle==='Warm beach / coastal')return DEST['Florida'];
-  if(answers.proximity==='Very — want to drive back easily')return DEST['Delaware (close to Northeast)'];
-  if(answers.lifestyle==='Four seasons but milder winters')return DEST['The Carolinas'];
+  var d = answers.destination;
+  if(d && DEST[d]) return DEST[d];
+  if(answers.lifestyle === 'Warm beach / coastal') return DEST['Florida'];
+  if(answers.proximity === 'Very — want to drive back easily') return DEST['Delaware (close to Northeast)'];
+  if(answers.lifestyle === 'Four seasons but milder winters') return DEST['The Carolinas'];
   return DEST['default'];
 }
 
 function showResultTeaser(){
-  var dest=getDestData();
-  var urgency=answers.timeline==='Within 1 year'||answers.timeline==='1–2 years'?'Ready to Move':answers.timeline==='3–5 years'?'Planning Ahead':'Exploring Options';
-  var uColor=answers.timeline==='Within 1 year'||answers.timeline==='1–2 years'?'#e74c3c':answers.timeline==='3–5 years'?'#f39c12':'#27ae60';
-  document.getElementById('result-emoji').textContent=dest.emoji;
-  document.getElementById('urgency-badge').textContent=urgency;
-  document.getElementById('urgency-badge').style.cssText='background:'+uColor+'30;color:'+uColor+';border:1px solid '+uColor+'50;display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:12px;';
-  document.getElementById('result-headline').innerHTML=(userName?userName+', your':'Your')+' top match is <span style="color:#f7b733">'+dest.name+' '+dest.emoji+'</span>';
-  document.getElementById('result-subhead').textContent=dest.headline;
-  document.getElementById('stat-savings').textContent=dest.savings;
-  document.getElementById('stat-tax').textContent=dest.tax;
-  document.getElementById('stat-cities').textContent=dest.cities;
+  var dest = getDestData();
+  var urgency = (answers.timeline === 'Within 1 year' || answers.timeline === '1–2 years')
+    ? 'Ready to Move'
+    : (answers.timeline === '3–5 years' ? 'Planning Ahead' : 'Exploring Options');
+
+  var uColor = (answers.timeline === 'Within 1 year' || answers.timeline === '1–2 years')
+    ? '#e74c3c'
+    : (answers.timeline === '3–5 years' ? '#f39c12' : '#27ae60');
+
+  document.getElementById('result-emoji').textContent = dest.emoji;
+  document.getElementById('urgency-badge').textContent = urgency;
+  document.getElementById('urgency-badge').style.cssText =
+    'background:' + uColor + '30;color:' + uColor + ';border:1px solid ' + uColor + '50;display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:12px;';
+  document.getElementById('result-headline').innerHTML = (userName ? userName + ', your' : 'Your') + ' top match is <span style="color:#f7b733">' + dest.name + ' ' + dest.emoji + '</span>';
+  document.getElementById('result-subhead').textContent = dest.headline;
+  document.getElementById('stat-savings').textContent = dest.savings;
+  document.getElementById('stat-tax').textContent = dest.tax;
+  document.getElementById('stat-cities').textContent = dest.cities;
+
+  var checkoutErr = document.getElementById('checkout-error');
+  checkoutErr.style.display = 'none';
+  checkoutErr.textContent = '';
+
+  var checkoutBtn = document.getElementById('checkout-btn');
+  checkoutBtn.disabled = false;
+  checkoutBtn.textContent = 'Unlock Full Blueprint — $49 →';
+
   showScreen('result');
 }
 
 async function generateBlueprint(){
-  var dest=getDestData();
-  document.getElementById('loading-name').textContent='Building '+userName+"'s Blueprint...";
+  var dest = getDestData();
+  document.getElementById('loading-name').textContent = 'Building ' + userName + "'s Blueprint...";
   showScreen('loading');
-  var profile={
-    firstName:userName,age:answers.age||'60-63',location:answers.location||'New York City / Long Island',
-    timeline:answers.timeline||'1-2 years',homeOwner:answers.homeOwner||'Yes - plan to sell',
-    homeValue:answers.homeValue||'$600K-$1M',income:answers.income||'$100K-$150K/year',
-    savings:answers.savings||'Not sure if enough',priority:answers.priority||'Low cost of living',
-    concern:answers.concern||'Running out of money',destination:dest.name,
-    lifestyle:answers.lifestyle||'Warm beach / coastal',proximity:answers.proximity||'Short flight is fine',
-    rentFirst:answers.rentFirst||'Yes - great idea'
+
+  var profile = {
+    firstName: userName,
+    age: answers.age || '60-63',
+    location: answers.location || 'New York City / Long Island',
+    timeline: answers.timeline || '1-2 years',
+    homeOwner: answers.homeOwner || 'Yes - plan to sell',
+    homeValue: answers.homeValue || '$600K-$1M',
+    income: answers.income || '$100K-$150K/year',
+    savings: answers.savings || 'Not sure if enough',
+    priority: answers.priority || 'Low cost of living',
+    concern: answers.concern || 'Running out of money',
+    destination: dest.name,
+    lifestyle: answers.lifestyle || 'Warm beach / coastal',
+    proximity: answers.proximity || 'Short flight is fine',
+    rentFirst: answers.rentFirst || 'Yes - great idea'
   };
-  try{
-    var res=await fetch('/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile:profile})});
-    var text=await res.text();
+
+  try {
+    var res = await fetch('/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ profile: profile })
+    });
+
+    var text = await res.text();
     var data;
-    try{data=JSON.parse(text);}catch(e){showScreen('result');alert('Server error. Please try again.');return;}
-    if(data.error){showScreen('result');alert('Error: '+data.error);return;}
-    if(!data.pdfHTML){showScreen('result');alert('No blueprint returned. Please try again.');return;}
-    pdfHTMLContent=data.pdfHTML;
-    document.getElementById('bp-title').textContent=userName+"'s Retirement Relocation Blueprint";
-    var iframe=document.getElementById('bp-iframe');
-    iframe.srcdoc=pdfHTMLContent;
+
+    try {
+      data = JSON.parse(text);
+    } catch(e) {
+      showScreen('result');
+      alert('Server error. Please try again.');
+      return;
+    }
+
+    if(data.error){
+      showScreen('result');
+      alert('Error: ' + data.error);
+      return;
+    }
+
+    if(!data.pdfHTML){
+      showScreen('result');
+      alert('No blueprint returned. Please try again.');
+      return;
+    }
+
+    pdfHTMLContent = data.pdfHTML;
+    document.getElementById('bp-title').textContent = userName + "'s Retirement Relocation Blueprint";
+    document.getElementById('bp-iframe').srcdoc = pdfHTMLContent;
     showScreen('blueprint');
-  }catch(err){showScreen('result');alert('Connection error: '+err.message);}
+  } catch(err) {
+    showScreen('result');
+    alert('Connection error: ' + err.message);
+  }
+}
+
+async function startCheckout(){
+  var checkoutBtn = document.getElementById('checkout-btn');
+  var errorEl = document.getElementById('checkout-error');
+  var dest = getDestData();
+
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
+
+  if(!userName || !userEmail){
+    errorEl.textContent = 'Please enter your name and email first.';
+    errorEl.style.display = 'block';
+    return;
+  }
+
+  checkoutBtn.disabled = true;
+  checkoutBtn.textContent = 'Preparing secure checkout...';
+
+  try {
+    var saveRes = await fetch('/save-report', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name: userName,
+        email: userEmail,
+        answers: answers,
+        destinationName: dest.name
+      })
+    });
+
+    var saveText = await saveRes.text();
+    var saveData;
+
+    try {
+      saveData = JSON.parse(saveText);
+    } catch(e) {
+      throw new Error('Could not save report.');
+    }
+
+    if(!saveRes.ok || saveData.error || !saveData.report_id){
+      throw new Error(saveData.error || 'Could not save report.');
+    }
+
+    checkoutBtn.textContent = 'Redirecting to Stripe...';
+
+    var checkoutRes = await fetch('/create-checkout-session', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ report_id: saveData.report_id })
+    });
+
+    var checkoutText = await checkoutRes.text();
+    var checkoutData;
+
+    try {
+      checkoutData = JSON.parse(checkoutText);
+    } catch(e) {
+      throw new Error('Could not create checkout session.');
+    }
+
+    if(!checkoutRes.ok || checkoutData.error || !checkoutData.url){
+      throw new Error(checkoutData.error || 'Could not create checkout session.');
+    }
+
+    window.location.href = checkoutData.url;
+  } catch(err) {
+    checkoutBtn.disabled = false;
+    checkoutBtn.textContent = 'Unlock Full Blueprint — $49 →';
+    errorEl.textContent = err.message || 'Checkout error. Please try again.';
+    errorEl.style.display = 'block';
+  }
 }
 
 function downloadPDF(){
-  var blob=new Blob([pdfHTMLContent],{type:'text/html'});
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');
-  a.href=url;
-  a.download=userName.replace(/\s+/g,'_')+'_Retirement_Blueprint.html';
+  var blob = new Blob([pdfHTMLContent], {type:'text/html'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = userName.replace(/\s+/g,'_') + '_Retirement_Blueprint_Preview.html';
   a.click();
   URL.revokeObjectURL(url);
 }
 
 function printBlueprint(){
-  var iframe=document.getElementById('bp-iframe');
+  var iframe = document.getElementById('bp-iframe');
   iframe.contentWindow.print();
 }
 
 function startOver(){
-  answers={};currentQ=0;selected=null;userName='';pdfHTMLContent='';
-  document.getElementById('optin-name').value='';
-  document.getElementById('optin-email').value='';
+  answers = {};
+  currentQ = 0;
+  selected = null;
+  userName = '';
+  userEmail = '';
+  pdfHTMLContent = '';
+
+  document.getElementById('optin-name').value = '';
+  document.getElementById('optin-email').value = '';
+
+  if(window.history && window.history.replaceState){
+    var cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
   showScreen('landing');
 }
+
+function initFromQueryString(){
+  var params = new URLSearchParams(window.location.search);
+
+  if(params.get('paid') === '1'){
+    showScreen('paid');
+    return;
+  }
+
+  if(params.get('canceled') === '1'){
+    showScreen('canceled');
+    return;
+  }
+
+  showScreen('landing');
+}
+
+initFromQueryString();
 </script>
 </body>
 </html>
