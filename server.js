@@ -10,7 +10,10 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const DATA_FILE = path.join(__dirname, 'reports.json');
 
 const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      maxNetworkRetries: 0,
+      timeout: 20000
+    })
   : null;
 
 function readJSONBody(req) {
@@ -224,37 +227,14 @@ function parseSectionsFromAnthropic(data) {
   return parsed.sections;
 }
 
-const IMAGES = {
-  cover_florida: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200&q=80',
-  cover_carolinas: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=1200&q=80',
-  cover_tennessee: 'https://images.unsplash.com/photo-1540541338287-41700207dee6?w=1200&q=80',
-  cover_default: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1200&q=80',
-  couple1: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=800&q=80',
-  couple2: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=800&q=80',
-  planning: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&q=80',
-  neighborhood: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80',
-  golf: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?w=800&q=80'
-};
-
-function getCoverImage(destination) {
-  if (!destination) return IMAGES.cover_default;
-
-  const d = destination.toLowerCase();
-  if (d.includes('florida')) return IMAGES.cover_florida;
-  if (d.includes('carolina')) return IMAGES.cover_carolinas;
-  if (d.includes('tennessee')) return IMAGES.cover_tennessee;
-
-  return IMAGES.cover_default;
-}
-
 function formatContent(content) {
   if (!content) return '<p>Content unavailable.</p>';
 
   const paras = content.split(/\n\n+/).filter(p => p.trim());
 
-  return (paras.length ? paras : [content]).map(p =>
-    '<p>' + p.trim() + '</p>'
-  ).join('\n');
+  return (paras.length ? paras : [content])
+    .map(p => '<p>' + p.trim() + '</p>')
+    .join('\n');
 }
 
 function teaserContent(content) {
@@ -270,7 +250,6 @@ function generateHTML(profile, sections, dest, opts = {}) {
     day: 'numeric'
   });
 
-  const coverImg = getCoverImage(profile.destination);
   const FREE_SECTIONS = opts.full ? sections.length : 3;
   const icons = ['👤', '💰', '📍', '💼', '📊', '🏠', '⚖️', '🌪️', '🤝', '📋', '❓', '📌'];
 
@@ -334,27 +313,9 @@ function generateHTML(profile, sections, dest, opts = {}) {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; background: #f5f3ef; color: #1f2937; }
   .cover {
-    position: relative;
-    min-height: 420px;
-    padding: 60px 40px;
+    background: linear-gradient(135deg, #0f2027, #2c5364);
     color: white;
-    overflow: hidden;
-  }
-  .cover-bg {
-    position: absolute;
-    inset: 0;
-    background-image: url('${coverImg}');
-    background-size: cover;
-    background-position: center;
-  }
-  .cover-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(15,32,39,0.7);
-  }
-  .cover-content, .cover-footer {
-    position: relative;
-    z-index: 2;
+    padding: 60px 40px;
   }
   .cover h1 {
     font-size: 48px;
@@ -489,16 +450,12 @@ function generateHTML(profile, sections, dest, opts = {}) {
 <body>
 
 <div class="cover">
-  <div class="cover-bg"></div>
-  <div class="cover-overlay"></div>
-  <div class="cover-content">
-    <h1>Prepared for ${profile.firstName}</h1>
-    <div class="cover-sub">
-      A personalized relocation guide for a Northeast retiree evaluating <strong>${dest.name}</strong>,
-      with practical savings estimates, risks, cultural differences, and next-step planning.
-    </div>
-    <div>Prepared ${today}</div>
+  <h1>Prepared for ${profile.firstName}</h1>
+  <div class="cover-sub">
+    A personalized relocation guide for a Northeast retiree evaluating <strong>${dest.name}</strong>,
+    with practical savings estimates, risks, cultural differences, and next-step planning.
   </div>
+  <div>Prepared ${today}</div>
 </div>
 
 ${previewBanner}
@@ -537,6 +494,43 @@ http.createServer(async (req, res) => {
       hasMakeSecret: !!process.env.MAKE_SHARED_SECRET,
       baseUrl: process.env.BASE_URL || null
     });
+  }
+
+  if (req.method === 'GET' && req.url === '/test-stripe') {
+    try {
+      if (!stripe) {
+        return sendJSON(res, 500, {
+          ok: false,
+          error: 'Stripe is not configured'
+        });
+      }
+
+      const balance = await stripe.balance.retrieve();
+
+      return sendJSON(res, 200, {
+        ok: true,
+        object: balance.object
+      });
+    } catch (err) {
+      console.error('Stripe test error:', {
+        type: err.type,
+        code: err.code,
+        message: err.message,
+        raw: err.raw ? {
+          message: err.raw.message,
+          code: err.raw.code,
+          type: err.raw.type
+        } : null
+      });
+
+      return sendJSON(res, 500, {
+        ok: false,
+        error: err.message,
+        stripe_type: err.type || null,
+        stripe_code: err.code || null,
+        stripe_raw_message: err.raw && err.raw.message ? err.raw.message : null
+      });
+    }
   }
 
   if (
@@ -631,6 +625,12 @@ http.createServer(async (req, res) => {
       if (!report) {
         return sendJSON(res, 404, { error: 'Report not found.' });
       }
+
+      console.log('Creating Stripe checkout session for report:', {
+        report_id: report.report_id,
+        email: report.email,
+        baseUrl: BASE_URL
+      });
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
