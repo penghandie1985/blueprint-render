@@ -935,9 +935,13 @@ http.createServer(async (req, res) => {
       writeReports(reports);
 
       return sendJSON(res, 200, { url: session.url });
-    } catch (err) {
-      return sendJSON(res, 500, { error: err.message });
-    }
+   if (req.method === 'POST' && req.url === '/create-checkout-session') {
+    try {
+      if (!stripe) {
+        return sendJSON(res, 500, {
+          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
+        });
+      }
   }
 
   if (req.method === 'POST' && req.url === '/fulfill-report') {
