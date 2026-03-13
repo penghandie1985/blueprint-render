@@ -82,7 +82,7 @@
     .stat-lbl { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
     .result-card { background: white; border-radius: 20px; padding: 24px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
     .result-card h3 { font-size: 18px; font-weight: 700; color: #1a2a3a; margin-bottom: 12px; }
-    .check-item { display: flex; gap: 10px; font-size: 14px; color: #444; line-height: 1.5; }
+    .check-item { display: flex; gap: 10px; font-size: 14px; color: #444; line-height: 1.5; margin-bottom: 8px; }
     .check-item span:first-child { color: #2c5364; flex-shrink: 0; font-weight: 700; }
     .cta-card { background: linear-gradient(135deg, #fffbf0, #fff8e0); border: 2px solid #f7b733; border-radius: 20px; padding: 28px 24px; text-align: center; margin-bottom: 16px; }
     .price-new { font-size: 42px; font-weight: 900; color: #1a2a3a; margin-bottom: 6px; }
@@ -141,13 +141,12 @@
     @media (max-width: 600px) {
       .stats { flex-direction: column; align-items: center; }
       .bp-actions { flex-direction: column; }
-      .btn-download, .btn-print, .btn-restart { flex: none; width: 100%; }
+      .btn-gold, .btn-download, .btn-print, .btn-restart { flex: none !important; width: 100%; }
     }
   </style>
 </head>
 <body>
 
-<!-- LANDING -->
 <div id="screen-landing" class="screen active">
   <div class="landing">
     <div class="emoji">🗺️</div>
@@ -164,7 +163,6 @@
   </div>
 </div>
 
-<!-- QUIZ -->
 <div id="screen-quiz" class="screen">
   <div class="quiz-wrap">
     <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
@@ -179,7 +177,6 @@
   </div>
 </div>
 
-<!-- OPT-IN -->
 <div id="screen-optin" class="screen">
   <div class="center-wrap">
     <div class="card">
@@ -195,7 +192,6 @@
   </div>
 </div>
 
-<!-- RESULT TEASER -->
 <div id="screen-result" class="screen">
   <div class="result-wrap">
     <div class="result-hero">
@@ -237,7 +233,7 @@
       <div style="font-size:13px;color:#e74c3c;font-weight:700;margin-bottom:4px;">One-time payment only · No subscription · No hidden fees</div>
       <div class="price-perks">✓ 30-day money-back guarantee &nbsp; ✓ Instant delivery</div>
 
-      <button class="btn-secondary" onclick="generateBlueprint()">Preview My Free Blueprint</button>
+      <button class="btn-secondary" onclick="generateBlueprint()">Open My Free 3-Section Preview</button>
       <button id="checkout-btn" class="btn-gold" onclick="startCheckout()">Unlock Full Blueprint — $49 →</button>
 
       <p class="secure">🔒 Secure checkout via Stripe</p>
@@ -250,7 +246,6 @@
   </div>
 </div>
 
-<!-- LOADING -->
 <div id="screen-loading" class="screen">
   <div class="loading-wrap">
     <div class="loading-card">
@@ -267,17 +262,18 @@
   </div>
 </div>
 
-<!-- BLUEPRINT PREVIEW -->
 <div id="screen-blueprint" class="screen">
   <div class="bp-wrap">
     <div class="bp-header">
       <div style="display:inline-block;background:#e8f8e8;color:#27ae60;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:10px">✓ Your Blueprint Is Ready</div>
       <h2 id="bp-title">Your Retirement Relocation Blueprint</h2>
       <div class="bp-actions">
+        <button id="bp-checkout-btn" class="btn-gold" onclick="startCheckout()" style="flex:2;">🔓 Unlock Full Blueprint — $49</button>
         <button class="btn-download" onclick="downloadPDF()">⬇️ Download Preview</button>
         <button class="btn-print" onclick="printBlueprint()">🖨️ Print</button>
         <button class="btn-restart" onclick="startOver()">Start Over</button>
       </div>
+      <div id="bp-checkout-error" style="display:none;color:#c0392b;font-size:13px;margin-top:10px;"></div>
     </div>
     <div class="bp-preview">
       <iframe id="bp-iframe" class="bp-iframe"></iframe>
@@ -285,7 +281,6 @@
   </div>
 </div>
 
-<!-- PAID STATUS -->
 <div id="screen-paid" class="screen">
   <div class="status-card">
     <div class="icon">✅</div>
@@ -295,7 +290,6 @@
   </div>
 </div>
 
-<!-- CANCELED STATUS -->
 <div id="screen-canceled" class="screen">
   <div class="status-card">
     <div class="icon">↩️</div>
@@ -456,6 +450,18 @@ function showResultTeaser(){
   checkoutBtn.disabled = false;
   checkoutBtn.textContent = 'Unlock Full Blueprint — $49 →';
 
+  var bpCheckoutBtn = document.getElementById('bp-checkout-btn');
+  if (bpCheckoutBtn) {
+    bpCheckoutBtn.disabled = false;
+    bpCheckoutBtn.textContent = '🔓 Unlock Full Blueprint — $49';
+  }
+
+  var bpErr = document.getElementById('bp-checkout-error');
+  if (bpErr) {
+    bpErr.style.display = 'none';
+    bpErr.textContent = '';
+  }
+
   showScreen('result');
 }
 
@@ -522,21 +528,46 @@ async function generateBlueprint(){
 }
 
 async function startCheckout(){
-  var checkoutBtn = document.getElementById('checkout-btn');
-  var errorEl = document.getElementById('checkout-error');
+  var mainCheckoutBtn = document.getElementById('checkout-btn');
+  var bpCheckoutBtn = document.getElementById('bp-checkout-btn');
+  var bpErrorEl = document.getElementById('bp-checkout-error');
+  var resultErrorEl = document.getElementById('checkout-error');
   var dest = getDestData();
 
-  errorEl.style.display = 'none';
-  errorEl.textContent = '';
+  if (bpErrorEl) {
+    bpErrorEl.style.display = 'none';
+    bpErrorEl.textContent = '';
+  }
+  if (resultErrorEl) {
+    resultErrorEl.style.display = 'none';
+    resultErrorEl.textContent = '';
+  }
+
+  function showErr(msg) {
+    if (bpErrorEl && document.getElementById('screen-blueprint').classList.contains('active')) {
+      bpErrorEl.textContent = msg;
+      bpErrorEl.style.display = 'block';
+    } else if (resultErrorEl) {
+      resultErrorEl.textContent = msg;
+      resultErrorEl.style.display = 'block';
+    } else {
+      alert(msg);
+    }
+  }
 
   if(!userName || !userEmail){
-    errorEl.textContent = 'Please enter your name and email first.';
-    errorEl.style.display = 'block';
+    showErr('Please enter your name and email first.');
     return;
   }
 
-  checkoutBtn.disabled = true;
-  checkoutBtn.textContent = 'Preparing secure checkout...';
+  if (mainCheckoutBtn) {
+    mainCheckoutBtn.disabled = true;
+    mainCheckoutBtn.textContent = 'Preparing secure checkout...';
+  }
+  if (bpCheckoutBtn) {
+    bpCheckoutBtn.disabled = true;
+    bpCheckoutBtn.textContent = 'Preparing secure checkout...';
+  }
 
   try {
     var saveRes = await fetch('/save-report', {
@@ -563,7 +594,12 @@ async function startCheckout(){
       throw new Error(saveData.error || 'Could not save report.');
     }
 
-    checkoutBtn.textContent = 'Redirecting to Stripe...';
+    if (mainCheckoutBtn) {
+      mainCheckoutBtn.textContent = 'Redirecting to Stripe...';
+    }
+    if (bpCheckoutBtn) {
+      bpCheckoutBtn.textContent = 'Redirecting to Stripe...';
+    }
 
     var checkoutRes = await fetch('/create-checkout-session', {
       method: 'POST',
@@ -586,10 +622,15 @@ async function startCheckout(){
 
     window.location.href = checkoutData.url;
   } catch(err) {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = 'Unlock Full Blueprint — $49 →';
-    errorEl.textContent = err.message || 'Checkout error. Please try again.';
-    errorEl.style.display = 'block';
+    if (mainCheckoutBtn) {
+      mainCheckoutBtn.disabled = false;
+      mainCheckoutBtn.textContent = 'Unlock Full Blueprint — $49 →';
+    }
+    if (bpCheckoutBtn) {
+      bpCheckoutBtn.disabled = false;
+      bpCheckoutBtn.textContent = '🔓 Unlock Full Blueprint — $49';
+    }
+    showErr(err.message || 'Checkout error. Please try again.');
   }
 }
 
