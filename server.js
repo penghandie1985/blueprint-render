@@ -16,7 +16,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 function readJSONBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+
+    req.on('data', chunk => {
+      body += chunk;
+    });
+
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
@@ -24,6 +28,7 @@ function readJSONBody(req) {
         reject(new Error('Invalid JSON body'));
       }
     });
+
     req.on('error', reject);
   });
 }
@@ -37,7 +42,7 @@ function sendJSON(res, status, payload) {
 function readReports() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-  } catch {
+  } catch (err) {
     return [];
   }
 }
@@ -149,7 +154,7 @@ function callAnthropic(profile, apiKey) {
             ', lifestyle: ' + profile.lifestyle +
             ', proximity: ' + profile.proximity +
             ', rent first: ' + profile.rentFirst +
-            '.\n\nReturn ONLY valid JSON in this exact format:\n{"sections":[{"title":"Section Name","content":"Content here"}]}\n\nInclude exactly these 12 sections with 2-3 paragraphs each (keep each content field under 900 characters):\n1. Your Retirement Relocation Snapshot\n2. The Cost of Staying vs. The Opportunity of Moving\n3. Your Top 3 Destination Matches\n4. How Social Security Works\n5. Your Retirement Budget - Three Scenarios\n6. Your Home Transition - Three Paths\n7. Legal and Tax Considerations\n8. Weather Climate and Natural Disaster Preparedness - include specific info about hurricane season in Florida (June-November, impact windows, hip roofs, concrete block, flood zones, windstorm insurance), storms in the Carolinas (nor\'easters, ice storms, occasional hurricanes, newer construction with hurricane straps), tornadoes and ice in Tennessee, how to read FEMA flood maps, what an elevation certificate is, and why insurance costs vary by zip code\n9. Understanding the Cultural Shift - include pace of life differences (South is slower, more relaxed), genuine friendliness and small talk norms, political and social culture differences (more conservative overall, church more central, but Charlotte/Raleigh/Tampa are more mixed), food culture changes, college football culture in Carolinas and Tennessee, the large Northeast transplant communities already in FL and the Carolinas, and driving culture differences\n10. Your Action Plan\n11. Questions to Ask Your Professionals\n12. Educational Disclaimer\n\nIMPORTANT: Keep each content field concise. The entire JSON response must be complete and valid.'
+            '.\n\nReturn ONLY valid JSON in this exact format:\n{"sections":[{"title":"Section Name","content":"Content here"}]}\n\nInclude exactly these 12 sections with 2-3 paragraphs each (keep each content field under 900 characters):\n1. Your Retirement Relocation Snapshot\n2. The Cost of Staying vs. The Opportunity of Moving\n3. Your Top 3 Destination Matches\n4. How Social Security Works\n5. Your Retirement Budget - Three Scenarios\n6. Your Home Transition - Three Paths\n7. Legal and Tax Considerations\n8. Weather Climate and Natural Disaster Preparedness\n9. Understanding the Cultural Shift\n10. Your Action Plan\n11. Questions to Ask Your Professionals\n12. Educational Disclaimer\n\nIMPORTANT: Keep each content field concise. The entire JSON response must be complete and valid.'
         }
       ]
     });
@@ -166,13 +171,17 @@ function callAnthropic(profile, apiKey) {
       }
     };
 
-    const anthropicReq = https.request(options, (anthropicRes) => {
+    const anthropicReq = https.request(options, anthropicRes => {
       let data = '';
-      anthropicRes.on('data', chunk => data += chunk);
+
+      anthropicRes.on('data', chunk => {
+        data += chunk;
+      });
+
       anthropicRes.on('end', () => {
         try {
           resolve(JSON.parse(data));
-        } catch {
+        } catch (err) {
           reject(new Error('Anthropic response parse error: ' + data.substring(0, 200)));
         }
       });
@@ -189,9 +198,12 @@ function parseSectionsFromAnthropic(data) {
     throw new Error(data.error.message || 'AI request failed');
   }
 
-  const rawText = (data.content && data.content[0] && data.content[0].text)
-    ? data.content[0].text.trim()
-    : '';
+  const rawText =
+    data.content &&
+    data.content[0] &&
+    data.content[0].text
+      ? data.content[0].text.trim()
+      : '';
 
   if (!rawText) {
     throw new Error('No content returned from AI.');
@@ -226,20 +238,22 @@ const IMAGES = {
 
 function getCoverImage(destination) {
   if (!destination) return IMAGES.cover_default;
+
   const d = destination.toLowerCase();
   if (d.includes('florida')) return IMAGES.cover_florida;
   if (d.includes('carolina')) return IMAGES.cover_carolinas;
   if (d.includes('tennessee')) return IMAGES.cover_tennessee;
+
   return IMAGES.cover_default;
 }
 
 function formatContent(content) {
   if (!content) return '<p>Content unavailable.</p>';
+
   const paras = content.split(/\n\n+/).filter(p => p.trim());
+
   return (paras.length ? paras : [content]).map(p =>
-    '<p>' + p.trim()
-      .replace(/Scenario (A|B|C|One|Two|Three)[:\s]/g, '<strong class="scenario-label">Scenario $1:</strong> ')
-      .replace(/Path (One|Two|Three|A|B|C)[:\s]/g, '<strong class="scenario-label">Path $1:</strong> ') + '</p>'
+    '<p>' + p.trim() + '</p>'
   ).join('\n');
 }
 
@@ -259,17 +273,9 @@ function generateHTML(profile, sections, dest, opts = {}) {
   const coverImg = getCoverImage(profile.destination);
   const FREE_SECTIONS = opts.full ? sections.length : 3;
   const icons = ['👤', '💰', '📍', '💼', '📊', '🏠', '⚖️', '🌪️', '🤝', '📋', '❓', '📌'];
-  const sectionImages = {
-    0: IMAGES.couple1,
-    2: coverImg,
-    4: IMAGES.planning,
-    5: IMAGES.neighborhood,
-    7: IMAGES.couple2
-  };
 
   const sectionsHTML = sections.map((sec, i) => {
     const isFree = i < FREE_SECTIONS;
-    const img = sectionImages[i] ? `<img src="${sectionImages[i]}" class="section-img" alt=""/>` : '';
 
     if (isFree) {
       return `
@@ -279,12 +285,12 @@ function generateHTML(profile, sections, dest, opts = {}) {
           <h2>${sec.title}</h2>
           ${opts.full ? '<span class="free-badge">FULL</span>' : '<span class="free-badge">FREE</span>'}
         </div>
-        ${img}
         <div class="section-content">${formatContent(sec.content)}</div>
       </div>`;
     }
 
     const teaser = teaserContent(sec.content);
+
     return `
     <div class="section section-locked">
       <div class="section-header">
@@ -315,19 +321,7 @@ function generateHTML(profile, sections, dest, opts = {}) {
   <div class="upgrade-strip">
     <h3>Unlock Your Complete Blueprint</h3>
     <p>You've seen what's possible. Your full report includes 9 more sections of personalized research — everything you need to make a confident, informed decision about your retirement move.</p>
-    <div class="upgrade-features">
-      <div class="upgrade-feature">💼 Social Security Strategy</div>
-      <div class="upgrade-feature">📊 3 Budget Scenarios</div>
-      <div class="upgrade-feature">🏠 Home Transition Paths</div>
-      <div class="upgrade-feature">⚖️ Legal & Tax Guide</div>
-      <div class="upgrade-feature">🌪️ Weather Preparedness</div>
-      <div class="upgrade-feature">🤝 Cultural Differences</div>
-      <div class="upgrade-feature">📋 Your Action Plan</div>
-      <div class="upgrade-feature">❓ Questions for Professionals</div>
-    </div>
     <div class="upgrade-price">$49</div>
-    <div class="upgrade-price-sub">One-time payment only &nbsp;·&nbsp; No subscription &nbsp;·&nbsp; No hidden fees</div>
-    <div class="upgrade-guarantee">✅ One-time payment · No subscription · No hidden fees &nbsp;·&nbsp; ✅ Instant delivery &nbsp;·&nbsp; ✅ 30-day money-back guarantee</div>
   </div>`;
 
   return `<!DOCTYPE html>
@@ -336,25 +330,15 @@ function generateHTML(profile, sections, dest, opts = {}) {
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Retirement Relocation Blueprint</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Inter', sans-serif;
-    background: #f5f3ef;
-    color: #1f2937;
-  }
+  body { font-family: Arial, sans-serif; background: #f5f3ef; color: #1f2937; }
   .cover {
     position: relative;
-    min-height: 540px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 64px 56px 40px;
-    overflow: hidden;
+    min-height: 420px;
+    padding: 60px 40px;
     color: white;
+    overflow: hidden;
   }
   .cover-bg {
     position: absolute;
@@ -362,223 +346,79 @@ function generateHTML(profile, sections, dest, opts = {}) {
     background-image: url('${coverImg}');
     background-size: cover;
     background-position: center;
-    transform: scale(1.03);
   }
   .cover-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(15,32,39,0.32), rgba(15,32,39,0.82));
+    background: rgba(15,32,39,0.7);
   }
-  .cover-content, .cover-footer { position: relative; z-index: 2; }
-  .cover-eyebrow {
-    display: inline-block;
-    background: rgba(247,183,51,0.18);
-    border: 1px solid rgba(247,183,51,0.4);
-    color: #f7b733;
-    padding: 8px 14px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    margin-bottom: 20px;
-    text-transform: uppercase;
+  .cover-content, .cover-footer {
+    position: relative;
+    z-index: 2;
   }
   .cover h1 {
-    font-family: 'Playfair Display', serif;
-    font-size: 54px;
-    line-height: 1.05;
-    max-width: 720px;
+    font-size: 48px;
     margin-bottom: 12px;
-  }
-  .cover h1 span {
-    color: #f7b733;
-    font-style: italic;
   }
   .cover-sub {
     font-size: 18px;
-    line-height: 1.7;
-    max-width: 680px;
-    color: rgba(255,255,255,0.9);
-    margin-bottom: 26px;
-  }
-  .cover-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
-    max-width: 760px;
-  }
-  .stat-card {
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.15);
-    backdrop-filter: blur(6px);
-    border-radius: 18px;
-    padding: 18px 18px;
-  }
-  .stat-val {
-    font-size: 22px;
-    font-weight: 800;
-    color: white;
-  }
-  .stat-lbl {
-    margin-top: 6px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: rgba(255,255,255,0.74);
-  }
-  .cover-footer {
-    margin-top: 36px;
-    font-size: 13px;
-    color: rgba(255,255,255,0.78);
+    max-width: 720px;
+    line-height: 1.6;
+    margin-bottom: 24px;
   }
   .preview-banner {
-    background: linear-gradient(90deg, #fff6dd, #fde8c8);
-    border-top: 1px solid #f5d892;
-    border-bottom: 1px solid #f5d892;
-    padding: 24px 56px;
+    background: #fff6dd;
+    padding: 20px 24px;
     text-align: center;
   }
   .preview-pill {
     display: inline-block;
     background: #f7b733;
-    color: #0f2027;
     padding: 6px 12px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: bold;
+    margin-bottom: 8px;
   }
   .preview-title {
-    font-family: 'Playfair Display', serif;
     font-size: 28px;
-    color: #1f2937;
+    font-weight: bold;
     margin-bottom: 8px;
   }
   .preview-sub {
-    max-width: 760px;
-    margin: 0 auto;
     font-size: 15px;
-    color: #4b5563;
-    line-height: 1.7;
+    color: #555;
   }
-  .toc-page {
-    padding: 48px 56px 24px;
-    background: #fff;
-  }
-  .toc-eyebrow {
-    font-size: 11px;
-    color: #b58900;
-    font-weight: 800;
-    letter-spacing: 1.4px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-  }
-  .toc-page h2 {
-    font-family: 'Playfair Display', serif;
-    font-size: 36px;
-    color: #0f2027;
-    margin-bottom: 10px;
-  }
-  .toc-sub {
-    color: #6b7280;
-    line-height: 1.7;
-    margin-bottom: 22px;
-    max-width: 760px;
-  }
-  .toc-item {
-    display: grid;
-    grid-template-columns: 44px 1fr auto;
-    gap: 14px;
-    align-items: center;
-    padding: 14px 0;
-    border-bottom: 1px solid #f0ece6;
-  }
-  .toc-num {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #0f2027;
-    color: white;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 14px;
-  }
-  .toc-num.locked {
-    background: #d1d5db;
-    color: #6b7280;
-  }
-  .toc-title {
-    font-size: 16px;
-    color: #1f2937;
-    font-weight: 600;
-  }
-  .toc-status {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-  }
-  .toc-status.free { color: #2e7d32; }
-  .toc-status.locked { color: #b91c1c; }
-
-  .img-strip {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
-    padding: 0 56px;
-    margin: 18px 0 32px;
-  }
-  .img-strip img {
-    width: 100%;
-    height: 180px;
-    object-fit: cover;
-    border-radius: 20px;
-    box-shadow: 0 8px 28px rgba(0,0,0,0.12);
-  }
-
   .content {
-    padding: 0 56px 32px;
+    padding: 24px;
+    max-width: 960px;
+    margin: 0 auto;
   }
   .section {
     background: white;
-    border-radius: 24px;
-    padding: 32px;
-    margin-bottom: 22px;
-    box-shadow: 0 10px 30px rgba(15,32,39,0.08);
-    border: 1px solid #f1ede6;
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
   }
   .section-header {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-bottom: 18px;
-    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
   }
   .section-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #fff4d6, #fde8c8);
-    display: grid;
-    place-items: center;
-    font-size: 22px;
+    font-size: 24px;
   }
   .section-header h2 {
-    font-family: 'Playfair Display', serif;
     font-size: 28px;
-    color: #0f2027;
-    line-height: 1.2;
     flex: 1;
   }
   .free-badge, .locked-badge {
     font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
+    font-weight: bold;
     padding: 8px 12px;
     border-radius: 999px;
-    text-transform: uppercase;
   }
   .free-badge {
     background: #e8f8e8;
@@ -588,145 +428,61 @@ function generateHTML(profile, sections, dest, opts = {}) {
     background: #fef2f2;
     color: #b91c1c;
   }
-  .section-img {
-    width: 100%;
-    height: 220px;
-    object-fit: cover;
-    border-radius: 18px;
-    margin-bottom: 18px;
-  }
   .section-content p {
-    font-size: 16px;
-    line-height: 1.85;
-    color: #374151;
-    margin-bottom: 14px;
+    line-height: 1.8;
+    margin-bottom: 12px;
   }
-  .scenario-label {
-    color: #0f2027;
-  }
-
   .section-locked {
     position: relative;
     overflow: hidden;
   }
-  .section-locked .section-content {
-    position: relative;
-    min-height: 190px;
-  }
   .teaser-text {
     color: #4b5563;
-    margin-bottom: 18px;
   }
   .blur-overlay {
     position: absolute;
     inset: 40px 0 0 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.94) 42%, rgba(255,255,255,1));
-    backdrop-filter: blur(6px);
+    background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.96) 40%, rgba(255,255,255,1));
+    backdrop-filter: blur(5px);
   }
   .lock-screen {
     position: absolute;
-    inset: auto 0 0 0;
-    padding: 30px 18px 12px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 28px 18px 12px;
     text-align: center;
   }
   .lock-icon {
-    font-size: 36px;
-    margin-bottom: 10px;
+    font-size: 34px;
+    margin-bottom: 8px;
   }
   .lock-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 24px;
-    color: #0f2027;
-    margin-bottom: 6px;
+    font-size: 22px;
+    font-weight: bold;
+    margin-bottom: 8px;
   }
   .lock-copy {
-    max-width: 520px;
-    margin: 0 auto;
-    color: #6b7280;
-    line-height: 1.8;
+    color: #666;
   }
-
   .upgrade-strip {
     background: linear-gradient(135deg, #0f2027, #2c5364);
-    margin: 0 0 0;
-    padding: 48px 56px;
+    color: white;
     text-align: center;
-  }
-  .upgrade-strip h3 {
-    font-family: 'Playfair Display', serif;
-    font-size: 30px;
-    color: white;
-    margin-bottom: 12px;
-  }
-  .upgrade-strip p {
-    font-size: 16px;
-    color: rgba(255,255,255,0.8);
-    margin-bottom: 8px;
-    line-height: 1.7;
-    max-width: 560px;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  .upgrade-features {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
-    margin: 24px 0;
-  }
-  .upgrade-feature {
-    background: rgba(255,255,255,0.1);
-    color: white;
-    font-size: 13px;
-    padding: 8px 16px;
-    border-radius: 20px;
+    padding: 42px 24px;
   }
   .upgrade-price {
-    font-family: 'Playfair Display', serif;
-    font-size: 48px;
     color: #f7b733;
-    font-weight: 900;
-    margin: 16px 0 4px;
+    font-size: 44px;
+    font-weight: bold;
+    margin-top: 12px;
   }
-  .upgrade-price-sub {
-    font-size: 14px;
-    color: rgba(255,255,255,0.6);
-    margin-bottom: 24px;
-  }
-  .upgrade-guarantee {
-    font-size: 13px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 16px;
-  }
-
   .report-footer {
     background: #0f2027;
-    color: rgba(255,255,255,0.7);
-    padding: 32px 56px;
-  }
-  .footer-brand {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    color: #f7b733;
-    font-weight: 700;
-    margin-bottom: 12px;
-  }
-  .footer-disc {
-    font-size: 11px;
+    color: rgba(255,255,255,0.8);
+    padding: 24px;
+    font-size: 12px;
     line-height: 1.8;
-  }
-
-  @media (max-width: 600px) {
-    .cover { padding: 40px 24px; }
-    .cover h1 { font-size: 32px; }
-    .cover-grid { grid-template-columns: 1fr; }
-    .toc-page, .content, .preview-banner, .upgrade-strip, .report-footer { padding-left: 24px; padding-right: 24px; }
-    .img-strip { margin: 24px; height: auto; grid-template-columns: 1fr; }
-    .upgrade-price { font-size: 36px; }
-  }
-  @media print {
-    .lock-screen, .blur-overlay, .upgrade-strip, .preview-banner { display: none; }
-    .section { page-break-inside: avoid; }
   }
 </style>
 </head>
@@ -736,53 +492,16 @@ function generateHTML(profile, sections, dest, opts = {}) {
   <div class="cover-bg"></div>
   <div class="cover-overlay"></div>
   <div class="cover-content">
-    <div class="cover-eyebrow">🗺️ Retirement Relocation Blueprint</div>
-    <h1>Prepared for<br/><span>${profile.firstName}</span></h1>
+    <h1>Prepared for ${profile.firstName}</h1>
     <div class="cover-sub">
       A personalized relocation guide for a Northeast retiree evaluating <strong>${dest.name}</strong>,
       with practical savings estimates, risks, cultural differences, and next-step planning.
     </div>
-    <div class="cover-grid">
-      <div class="stat-card">
-        <div class="stat-val">${dest.name}</div>
-        <div class="stat-lbl">Your likely destination match</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-val">${dest.savings}</div>
-        <div class="stat-lbl">Est. monthly savings</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-val">${dest.tax}</div>
-        <div class="stat-lbl">Potential tax savings/yr</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-val">${dest.cities}</div>
-        <div class="stat-lbl">Top cities to explore</div>
-      </div>
-    </div>
+    <div>Prepared ${today}</div>
   </div>
-  <div class="cover-footer">Educational purposes only. Not personalized financial, legal, or investment advice. Prepared ${today}.</div>
 </div>
 
 ${previewBanner}
-
-<div class="toc-page">
-  <div class="toc-eyebrow">Inside Your Report</div>
-  <h2>What's In Your Blueprint</h2>
-  <p class="toc-sub">12 sections written specifically for ${profile.firstName} — ${opts.full ? 'all unlocked' : '3 free, 9 unlocked with your full Blueprint'}.</p>
-  ${sections.map((s, i) => `
-  <div class="toc-item">
-    <div class="toc-num ${i >= FREE_SECTIONS ? 'locked' : ''}">${i + 1}</div>
-    <div class="toc-title">${s.title}</div>
-    <div class="toc-status ${i < FREE_SECTIONS ? 'free' : 'locked'}">${i < FREE_SECTIONS ? (opts.full ? '✓ Included' : '✓ Free') : '🔒 Locked'}</div>
-  </div>`).join('')}
-</div>
-
-<div class="img-strip">
-  <img src="${IMAGES.couple1}" alt="Retired couple"/>
-  <img src="${coverImg}" alt="Destination scenery"/>
-  <img src="${IMAGES.golf}" alt="Active retirement"/>
-</div>
 
 <div class="content">
   ${sectionsHTML}
@@ -791,11 +510,9 @@ ${previewBanner}
 ${upgradeStrip}
 
 <div class="report-footer">
-  <div class="footer-brand">Retirement Relocation Blueprint</div>
-  <div class="footer-disc">
-    <strong>Educational Disclaimer:</strong> This blueprint is generated for general educational and informational purposes only using publicly available data. It does not constitute personalized financial, investment, tax, legal, or retirement planning advice. All figures shown are general illustrations and estimates — they do not reflect any individual's specific financial situation. This platform is not a registered investment adviser. Always consult a licensed financial planner, CPA, real estate attorney, and other qualified professionals before making any major financial or life decisions. © ${new Date().getFullYear()} Retirement Relocation Blueprint. All rights reserved.
-  </div>
+  <strong>Educational Disclaimer:</strong> This blueprint is generated for general informational purposes only and is not financial, legal, tax, or investment advice.
 </div>
+
 </body>
 </html>`;
 }
@@ -822,22 +539,26 @@ http.createServer(async (req, res) => {
     });
   }
 
-  if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html' || req.url.startsWith('/?'))) {
+  if (
+    req.method === 'GET' &&
+    (req.url === '/' || req.url === '/index.html' || req.url.startsWith('/?'))
+  ) {
     try {
       const file = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
       res.setHeader('Content-Type', 'text/html');
       res.writeHead(200);
       res.end(file);
-    } catch (e) {
+    } catch (err) {
       res.writeHead(500);
-      res.end('Could not load index.html: ' + e.message);
+      res.end('Could not load index.html: ' + err.message);
     }
     return;
   }
 
   if (req.method === 'POST' && req.url === '/generate') {
     try {
-      const { profile } = await readJSONBody(req);
+      const body = await readJSONBody(req);
+      const profile = body.profile;
       const apiKey = process.env.ANTHROPIC_API_KEY;
 
       if (!apiKey) {
@@ -857,7 +578,11 @@ http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && req.url === '/save-report') {
     try {
-      const { name, email, answers, destinationName } = await readJSONBody(req);
+      const body = await readJSONBody(req);
+      const name = body.name;
+      const email = body.email;
+      const answers = body.answers;
+      const destinationName = body.destinationName;
 
       if (!name || !email || !answers || !destinationName) {
         return sendJSON(res, 400, { error: 'Missing required fields.' });
@@ -893,7 +618,8 @@ http.createServer(async (req, res) => {
         });
       }
 
-      const { report_id } = await readJSONBody(req);
+      const body = await readJSONBody(req);
+      const report_id = body.report_id;
 
       if (!report_id) {
         return sendJSON(res, 400, { error: 'Missing report_id.' });
@@ -935,13 +661,25 @@ http.createServer(async (req, res) => {
       writeReports(reports);
 
       return sendJSON(res, 200, { url: session.url });
-   if (req.method === 'POST' && req.url === '/create-checkout-session') {
-    try {
-      if (!stripe) {
-        return sendJSON(res, 500, {
-          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
-        });
-      }
+    } catch (err) {
+      console.error('Stripe checkout session error:', {
+        type: err.type,
+        code: err.code,
+        message: err.message,
+        raw: err.raw ? {
+          message: err.raw.message,
+          code: err.raw.code,
+          type: err.raw.type
+        } : null
+      });
+
+      return sendJSON(res, 500, {
+        error: err.message,
+        stripe_type: err.type || null,
+        stripe_code: err.code || null,
+        stripe_raw_message: err.raw && err.raw.message ? err.raw.message : null
+      });
+    }
   }
 
   if (req.method === 'POST' && req.url === '/fulfill-report') {
@@ -958,7 +696,9 @@ http.createServer(async (req, res) => {
         return sendJSON(res, 401, { error: 'Unauthorized.' });
       }
 
-      const { report_id, stripe_session_id } = await readJSONBody(req);
+      const body = await readJSONBody(req);
+      const report_id = body.report_id;
+      const stripe_session_id = body.stripe_session_id;
 
       if (!report_id || !stripe_session_id) {
         return sendJSON(res, 400, { error: 'Missing required fields.' });
