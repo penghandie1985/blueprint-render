@@ -28,6 +28,12 @@ function readJSONBody(req) {
   });
 }
 
+function sendJSON(res, status, payload) {
+  res.setHeader('Content-Type', 'application/json');
+  res.writeHead(status);
+  res.end(JSON.stringify(payload));
+}
+
 function readReports() {
   try {
     return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -46,12 +52,48 @@ function makeReportId() {
 
 function getDestMeta(destination) {
   const DEST = {
-    'Florida': { emoji: '🌴', name: 'Florida', cities: 'Tampa, Sarasota, or Jacksonville', savings: '$2,800–$3,900/mo', tax: '$8,000–$22,000/yr' },
-    'The Carolinas': { emoji: '🌄', name: 'The Carolinas', cities: 'Charlotte, Raleigh, or Asheville', savings: '$1,800–$2,800/mo', tax: '$5,000–$15,000/yr' },
-    'Tennessee': { emoji: '🎸', name: 'Tennessee', cities: 'Nashville, Chattanooga, or Knoxville', savings: '$2,000–$3,200/mo', tax: '$7,000–$18,000/yr' },
-    'Delaware': { emoji: '🦅', name: 'Delaware', cities: 'Rehoboth Beach or Wilmington', savings: '$1,200–$2,200/mo', tax: '$4,000–$12,000/yr' },
-    'Texas': { emoji: '⭐', name: 'Texas', cities: 'Austin, San Antonio, or The Woodlands', savings: '$1,800–$3,000/mo', tax: '$6,000–$16,000/yr' },
-    'Arizona': { emoji: '🌵', name: 'Arizona', cities: 'Scottsdale, Tucson, or Sedona', savings: '$1,500–$2,800/mo', tax: '$5,000–$14,000/yr' }
+    'Florida': {
+      emoji: '🌴',
+      name: 'Florida',
+      cities: 'Tampa, Sarasota, or Jacksonville',
+      savings: '$2,800–$3,900/mo',
+      tax: '$8,000–$22,000/yr'
+    },
+    'The Carolinas': {
+      emoji: '🌄',
+      name: 'The Carolinas',
+      cities: 'Charlotte, Raleigh, or Asheville',
+      savings: '$1,800–$2,800/mo',
+      tax: '$5,000–$15,000/yr'
+    },
+    'Tennessee': {
+      emoji: '🎸',
+      name: 'Tennessee',
+      cities: 'Nashville, Chattanooga, or Knoxville',
+      savings: '$2,000–$3,200/mo',
+      tax: '$7,000–$18,000/yr'
+    },
+    'Delaware': {
+      emoji: '🦅',
+      name: 'Delaware',
+      cities: 'Rehoboth Beach or Wilmington',
+      savings: '$1,200–$2,200/mo',
+      tax: '$4,000–$12,000/yr'
+    },
+    'Texas': {
+      emoji: '⭐',
+      name: 'Texas',
+      cities: 'Austin, San Antonio, or The Woodlands',
+      savings: '$1,800–$3,000/mo',
+      tax: '$6,000–$16,000/yr'
+    },
+    'Arizona': {
+      emoji: '🌵',
+      name: 'Arizona',
+      cities: 'Scottsdale, Tucson, or Sedona',
+      savings: '$1,500–$2,800/mo',
+      tax: '$5,000–$14,000/yr'
+    }
   };
 
   return DEST[destination] || {
@@ -60,6 +102,25 @@ function getDestMeta(destination) {
     cities: 'Top retirement cities',
     savings: '$1,500–$3,500/mo',
     tax: '$5,000–$18,000/yr'
+  };
+}
+
+function buildProfileFromAnswers(name, answers, destinationName) {
+  return {
+    firstName: name,
+    age: answers.age || '60-63',
+    location: answers.location || 'New York City / Long Island',
+    timeline: answers.timeline || '1-2 years',
+    homeOwner: answers.homeOwner || 'Yes - plan to sell',
+    homeValue: answers.homeValue || '$600K-$1M',
+    income: answers.income || '$100K-$150K/year',
+    savings: answers.savings || 'Not sure if enough',
+    priority: answers.priority || 'Low cost of living',
+    concern: answers.concern || 'Running out of money',
+    destination: destinationName,
+    lifestyle: answers.lifestyle || 'Warm beach / coastal',
+    proximity: answers.proximity || 'Short flight is fine',
+    rentFirst: answers.rentFirst || 'Yes - great idea'
   };
 }
 
@@ -143,6 +204,7 @@ function parseSectionsFromAnthropic(data) {
     .trim();
 
   const parsed = JSON.parse(cleaned);
+
   if (!parsed.sections || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
     throw new Error('AI returned no sections.');
   }
@@ -738,31 +800,6 @@ ${upgradeStrip}
 </html>`;
 }
 
-function sendJSON(res, status, payload) {
-  res.setHeader('Content-Type', 'application/json');
-  res.writeHead(status);
-  res.end(JSON.stringify(payload));
-}
-
-function buildProfileFromAnswers(name, answers, destinationName) {
-  return {
-    firstName: name,
-    age: answers.age || '60-63',
-    location: answers.location || 'New York City / Long Island',
-    timeline: answers.timeline || '1-2 years',
-    homeOwner: answers.homeOwner || 'Yes - plan to sell',
-    homeValue: answers.homeValue || '$600K-$1M',
-    income: answers.income || '$100K-$150K/year',
-    savings: answers.savings || 'Not sure if enough',
-    priority: answers.priority || 'Low cost of living',
-    concern: answers.concern || 'Running out of money',
-    destination: destinationName,
-    lifestyle: answers.lifestyle || 'Warm beach / coastal',
-    proximity: answers.proximity || 'Short flight is fine',
-    rentFirst: answers.rentFirst || 'Yes - great idea'
-  };
-}
-
 http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-make-secret');
@@ -771,6 +808,18 @@ http.createServer(async (req, res) => {
     res.writeHead(200);
     res.end();
     return;
+  }
+
+  if (req.method === 'GET' && req.url === '/debug-env') {
+    return sendJSON(res, 200, {
+      hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+      hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY
+        ? process.env.STRIPE_SECRET_KEY.substring(0, 7)
+        : null,
+      hasMakeSecret: !!process.env.MAKE_SHARED_SECRET,
+      baseUrl: process.env.BASE_URL || null
+    });
   }
 
   if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html' || req.url.startsWith('/?'))) {
@@ -792,7 +841,7 @@ http.createServer(async (req, res) => {
       const apiKey = process.env.ANTHROPIC_API_KEY;
 
       if (!apiKey) {
-        return sendJSON(res, 500, { error: 'API key not configured.' });
+        return sendJSON(res, 500, { error: 'ANTHROPIC_API_KEY is not configured.' });
       }
 
       const aiData = await callAnthropic(profile, apiKey);
@@ -829,6 +878,7 @@ http.createServer(async (req, res) => {
       });
 
       writeReports(reports);
+
       return sendJSON(res, 200, { report_id });
     } catch (err) {
       return sendJSON(res, 500, { error: err.message });
@@ -838,7 +888,9 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/create-checkout-session') {
     try {
       if (!stripe) {
-        return sendJSON(res, 500, { error: 'Stripe is not configured.' });
+        return sendJSON(res, 500, {
+          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
+        });
       }
 
       const { report_id } = await readJSONBody(req);
@@ -891,10 +943,13 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/fulfill-report') {
     try {
       if (!stripe) {
-        return sendJSON(res, 500, { error: 'Stripe is not configured.' });
+        return sendJSON(res, 500, {
+          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
+        });
       }
 
       const makeSecret = req.headers['x-make-secret'];
+
       if (!process.env.MAKE_SHARED_SECRET || makeSecret !== process.env.MAKE_SHARED_SECRET) {
         return sendJSON(res, 401, { error: 'Unauthorized.' });
       }
@@ -906,6 +961,7 @@ http.createServer(async (req, res) => {
       }
 
       const session = await stripe.checkout.sessions.retrieve(stripe_session_id);
+
       if (session.payment_status !== 'paid') {
         return sendJSON(res, 400, { error: 'Payment not completed.' });
       }
@@ -922,8 +978,9 @@ http.createServer(async (req, res) => {
       }
 
       const apiKey = process.env.ANTHROPIC_API_KEY;
+
       if (!apiKey) {
-        return sendJSON(res, 500, { error: 'API key not configured.' });
+        return sendJSON(res, 500, { error: 'ANTHROPIC_API_KEY is not configured.' });
       }
 
       const aiData = await callAnthropic(report.profile, apiKey);
@@ -949,7 +1006,7 @@ http.createServer(async (req, res) => {
         report_id: report.report_id,
         email_to: report.email,
         generated_file: report.generated_file,
-        note: 'Full report generated successfully. Add email sending next.'
+        note: 'Full report generated successfully. Email sending can be added next.'
       });
     } catch (err) {
       return sendJSON(res, 500, { error: err.message });
@@ -958,7 +1015,7 @@ http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && req.url.startsWith('/generated_reports/')) {
     try {
-      const safePath = path.normalize(req.url).replace(/^(\.\.[\/\\])+/, '');
+      const safePath = path.normalize(req.url).replace(/^(\.\.[/\\])+/, '');
       const filePath = path.join(__dirname, safePath);
 
       if (!fs.existsSync(filePath)) {
