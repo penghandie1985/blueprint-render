@@ -6,6 +6,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "stripe": "^18.0.0"
+    "stripe": "^18.0.0",
+    "resend": "^4.0.0"
   }
 }
