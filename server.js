@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Stripe = require('stripe');
+const { Resend } = require('resend');
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
@@ -16,14 +17,25 @@ const stripe = process.env.STRIPE_SECRET_KEY
     })
   : null;
 
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 function readJSONBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-
     req.on('data', chunk => {
       body += chunk;
     });
-
     req.on('end', () => {
       try {
         resolve(body ? JSON.parse(body) : {});
@@ -31,7 +43,6 @@ function readJSONBody(req) {
         reject(new Error('Invalid JSON body'));
       }
     });
-
     req.on('error', reject);
   });
 }
@@ -176,11 +187,9 @@ function callAnthropic(profile, apiKey) {
 
     const anthropicReq = https.request(options, anthropicRes => {
       let data = '';
-
       anthropicRes.on('data', chunk => {
         data += chunk;
       });
-
       anthropicRes.on('end', () => {
         try {
           resolve(JSON.parse(data));
@@ -229,9 +238,7 @@ function parseSectionsFromAnthropic(data) {
 
 function formatContent(content) {
   if (!content) return '<p>Content unavailable.</p>';
-
   const paras = content.split(/\n\n+/).filter(p => p.trim());
-
   return (paras.length ? paras : [content])
     .map(p => '<p>' + p.trim() + '</p>')
     .join('\n');
@@ -312,143 +319,35 @@ function generateHTML(profile, sections, dest, opts = {}) {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; background: #f5f3ef; color: #1f2937; }
-  .cover {
-    background: linear-gradient(135deg, #0f2027, #2c5364);
-    color: white;
-    padding: 60px 40px;
-  }
-  .cover h1 {
-    font-size: 48px;
-    margin-bottom: 12px;
-  }
-  .cover-sub {
-    font-size: 18px;
-    max-width: 720px;
-    line-height: 1.6;
-    margin-bottom: 24px;
-  }
-  .preview-banner {
-    background: #fff6dd;
-    padding: 20px 24px;
-    text-align: center;
-  }
-  .preview-pill {
-    display: inline-block;
-    background: #f7b733;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-  .preview-title {
-    font-size: 28px;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-  .preview-sub {
-    font-size: 15px;
-    color: #555;
-  }
-  .content {
-    padding: 24px;
-    max-width: 960px;
-    margin: 0 auto;
-  }
-  .section {
-    background: white;
-    border-radius: 20px;
-    padding: 28px;
-    margin-bottom: 20px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-  }
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-  .section-icon {
-    font-size: 24px;
-  }
-  .section-header h2 {
-    font-size: 28px;
-    flex: 1;
-  }
-  .free-badge, .locked-badge {
-    font-size: 11px;
-    font-weight: bold;
-    padding: 8px 12px;
-    border-radius: 999px;
-  }
-  .free-badge {
-    background: #e8f8e8;
-    color: #2e7d32;
-  }
-  .locked-badge {
-    background: #fef2f2;
-    color: #b91c1c;
-  }
-  .section-content p {
-    line-height: 1.8;
-    margin-bottom: 12px;
-  }
-  .section-locked {
-    position: relative;
-    overflow: hidden;
-  }
-  .teaser-text {
-    color: #4b5563;
-  }
-  .blur-overlay {
-    position: absolute;
-    inset: 40px 0 0 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.96) 40%, rgba(255,255,255,1));
-    backdrop-filter: blur(5px);
-  }
-  .lock-screen {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 28px 18px 12px;
-    text-align: center;
-  }
-  .lock-icon {
-    font-size: 34px;
-    margin-bottom: 8px;
-  }
-  .lock-title {
-    font-size: 22px;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-  .lock-copy {
-    color: #666;
-  }
-  .upgrade-strip {
-    background: linear-gradient(135deg, #0f2027, #2c5364);
-    color: white;
-    text-align: center;
-    padding: 42px 24px;
-  }
-  .upgrade-price {
-    color: #f7b733;
-    font-size: 44px;
-    font-weight: bold;
-    margin-top: 12px;
-  }
-  .report-footer {
-    background: #0f2027;
-    color: rgba(255,255,255,0.8);
-    padding: 24px;
-    font-size: 12px;
-    line-height: 1.8;
-  }
+  .cover { background: linear-gradient(135deg, #0f2027, #2c5364); color: white; padding: 60px 40px; }
+  .cover h1 { font-size: 48px; margin-bottom: 12px; }
+  .cover-sub { font-size: 18px; max-width: 720px; line-height: 1.6; margin-bottom: 24px; }
+  .preview-banner { background: #fff6dd; padding: 20px 24px; text-align: center; }
+  .preview-pill { display: inline-block; background: #f7b733; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
+  .preview-title { font-size: 28px; font-weight: bold; margin-bottom: 8px; }
+  .preview-sub { font-size: 15px; color: #555; }
+  .content { padding: 24px; max-width: 960px; margin: 0 auto; }
+  .section { background: white; border-radius: 20px; padding: 28px; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .section-icon { font-size: 24px; }
+  .section-header h2 { font-size: 28px; flex: 1; }
+  .free-badge, .locked-badge { font-size: 11px; font-weight: bold; padding: 8px 12px; border-radius: 999px; }
+  .free-badge { background: #e8f8e8; color: #2e7d32; }
+  .locked-badge { background: #fef2f2; color: #b91c1c; }
+  .section-content p { line-height: 1.8; margin-bottom: 12px; }
+  .section-locked { position: relative; overflow: hidden; }
+  .teaser-text { color: #4b5563; }
+  .blur-overlay { position: absolute; inset: 40px 0 0 0; background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.96) 40%, rgba(255,255,255,1)); backdrop-filter: blur(5px); }
+  .lock-screen { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 18px 12px; text-align: center; }
+  .lock-icon { font-size: 34px; margin-bottom: 8px; }
+  .lock-title { font-size: 22px; font-weight: bold; margin-bottom: 8px; }
+  .lock-copy { color: #666; }
+  .upgrade-strip { background: linear-gradient(135deg, #0f2027, #2c5364); color: white; text-align: center; padding: 42px 24px; }
+  .upgrade-price { color: #f7b733; font-size: 44px; font-weight: bold; margin-top: 12px; }
+  .report-footer { background: #0f2027; color: rgba(255,255,255,0.8); padding: 24px; font-size: 12px; line-height: 1.8; }
 </style>
 </head>
 <body>
-
 <div class="cover">
   <h1>Prepared for ${profile.firstName}</h1>
   <div class="cover-sub">
@@ -469,14 +368,114 @@ ${upgradeStrip}
 <div class="report-footer">
   <strong>Educational Disclaimer:</strong> This blueprint is generated for general informational purposes only and is not financial, legal, tax, or investment advice.
 </div>
-
 </body>
 </html>`;
 }
 
+async function sendReportEmail(toEmail, firstName, reportUrl) {
+  if (!resend) {
+    throw new Error('Resend is not configured.');
+  }
+
+  if (!process.env.FROM_EMAIL) {
+    throw new Error('FROM_EMAIL is not configured.');
+  }
+
+  const response = await resend.emails.send({
+    from: process.env.FROM_EMAIL,
+    to: [toEmail],
+    subject: 'Your Retirement Relocation Blueprint Is Ready',
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;padding:24px;color:#1f2937;line-height:1.7;">
+        <h1 style="font-size:28px;margin-bottom:12px;">Your Blueprint is Ready</h1>
+        <p>Hi ${firstName || 'there'},</p>
+        <p>Thanks for your purchase. Your full <strong>Retirement Relocation Blueprint</strong> is ready.</p>
+        <p>
+          <a href="${reportUrl}" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;padding:14px 20px;border-radius:10px;font-weight:700;">
+            Open My Full Report
+          </a>
+        </p>
+        <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+        <p style="word-break:break-all;color:#2563eb;">${reportUrl}</p>
+        <hr style="margin:24px 0;border:none;border-top:1px solid #e5e7eb;" />
+        <p style="font-size:12px;color:#6b7280;">
+          Educational content only. This is not financial, tax, legal, or investment advice.
+        </p>
+      </div>
+    `
+  });
+
+  return response;
+}
+
+async function fulfillPaidReport(checkoutSessionId) {
+  if (!stripe) throw new Error('Stripe is not configured.');
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.');
+
+  const session = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+
+  if (session.payment_status !== 'paid') {
+    throw new Error('Checkout session is not paid.');
+  }
+
+  const reportId = session.metadata && session.metadata.report_id;
+  if (!reportId) {
+    throw new Error('No report_id found in Stripe metadata.');
+  }
+
+  const reports = readReports();
+  const report = reports.find(r => r.report_id === reportId);
+
+  if (!report) {
+    throw new Error('Report not found.');
+  }
+
+  if (report.status === 'fulfilled' && report.generated_file) {
+    return {
+      success: true,
+      already_fulfilled: true,
+      report_id: report.report_id,
+      email_to: report.email,
+      generated_file: report.generated_file
+    };
+  }
+
+  const aiData = await callAnthropic(report.profile, process.env.ANTHROPIC_API_KEY);
+  const sections = parseSectionsFromAnthropic(aiData);
+  const dest = getDestMeta(report.profile.destination);
+  const fullHTML = generateHTML(report.profile, sections, dest, { full: true });
+
+  const outDir = path.join(__dirname, 'generated_reports');
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const filename = `${report.report_id}.html`;
+  const filePath = path.join(outDir, filename);
+  fs.writeFileSync(filePath, fullHTML, 'utf8');
+
+  report.status = 'fulfilled';
+  report.fulfilled_at = new Date().toISOString();
+  report.stripe_session_id = checkoutSessionId;
+  report.generated_file = `/generated_reports/${filename}`;
+
+  const reportUrl = `${BASE_URL}${report.generated_file}`;
+  const emailResult = await sendReportEmail(report.email, report.name, reportUrl);
+
+  report.email_sent_at = new Date().toISOString();
+  report.email_id = emailResult && emailResult.data ? emailResult.data.id : null;
+
+  writeReports(reports);
+
+  return {
+    success: true,
+    report_id: report.report_id,
+    email_to: report.email,
+    generated_file: report.generated_file
+  };
+}
+
 http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-make-secret');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Stripe-Signature');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -488,10 +487,10 @@ http.createServer(async (req, res) => {
     return sendJSON(res, 200, {
       hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
       hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY
-        ? process.env.STRIPE_SECRET_KEY.substring(0, 7)
-        : null,
-      hasMakeSecret: !!process.env.MAKE_SHARED_SECRET,
+      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 7) : null,
+      hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+      hasResendKey: !!process.env.RESEND_API_KEY,
+      hasFromEmail: !!process.env.FROM_EMAIL,
       baseUrl: process.env.BASE_URL || null
     });
   }
@@ -499,44 +498,21 @@ http.createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/test-stripe') {
     try {
       if (!stripe) {
-        return sendJSON(res, 500, {
-          ok: false,
-          error: 'Stripe is not configured'
-        });
+        return sendJSON(res, 500, { ok: false, error: 'Stripe is not configured' });
       }
-
       const balance = await stripe.balance.retrieve();
-
-      return sendJSON(res, 200, {
-        ok: true,
-        object: balance.object
-      });
+      return sendJSON(res, 200, { ok: true, object: balance.object });
     } catch (err) {
-      console.error('Stripe test error:', {
-        type: err.type,
-        code: err.code,
-        message: err.message,
-        raw: err.raw ? {
-          message: err.raw.message,
-          code: err.raw.code,
-          type: err.raw.type
-        } : null
-      });
-
       return sendJSON(res, 500, {
         ok: false,
         error: err.message,
         stripe_type: err.type || null,
-        stripe_code: err.code || null,
-        stripe_raw_message: err.raw && err.raw.message ? err.raw.message : null
+        stripe_code: err.code || null
       });
     }
   }
 
-  if (
-    req.method === 'GET' &&
-    (req.url === '/' || req.url === '/index.html' || req.url.startsWith('/?'))
-  ) {
+  if (req.method === 'GET' && (req.url === '/' || req.url === '/index.html' || req.url.startsWith('/?'))) {
     try {
       const file = fs.readFileSync(path.join(__dirname, 'public', 'index.html'));
       res.setHeader('Content-Type', 'text/html');
@@ -553,13 +529,12 @@ http.createServer(async (req, res) => {
     try {
       const body = await readJSONBody(req);
       const profile = body.profile;
-      const apiKey = process.env.ANTHROPIC_API_KEY;
 
-      if (!apiKey) {
+      if (!process.env.ANTHROPIC_API_KEY) {
         return sendJSON(res, 500, { error: 'ANTHROPIC_API_KEY is not configured.' });
       }
 
-      const aiData = await callAnthropic(profile, apiKey);
+      const aiData = await callAnthropic(profile, process.env.ANTHROPIC_API_KEY);
       const sections = parseSectionsFromAnthropic(aiData);
       const dest = getDestMeta(profile.destination);
       const pdfHTML = generateHTML(profile, sections, dest, { full: false });
@@ -573,10 +548,7 @@ http.createServer(async (req, res) => {
   if (req.method === 'POST' && req.url === '/save-report') {
     try {
       const body = await readJSONBody(req);
-      const name = body.name;
-      const email = body.email;
-      const answers = body.answers;
-      const destinationName = body.destinationName;
+      const { name, email, answers, destinationName } = body;
 
       if (!name || !email || !answers || !destinationName) {
         return sendJSON(res, 400, { error: 'Missing required fields.' });
@@ -597,7 +569,6 @@ http.createServer(async (req, res) => {
       });
 
       writeReports(reports);
-
       return sendJSON(res, 200, { report_id });
     } catch (err) {
       return sendJSON(res, 500, { error: err.message });
@@ -608,12 +579,12 @@ http.createServer(async (req, res) => {
     try {
       if (!stripe) {
         return sendJSON(res, 500, {
-          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
+          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render and redeploy.'
         });
       }
 
       const body = await readJSONBody(req);
-      const report_id = body.report_id;
+      const { report_id } = body;
 
       if (!report_id) {
         return sendJSON(res, 400, { error: 'Missing report_id.' });
@@ -625,12 +596,6 @@ http.createServer(async (req, res) => {
       if (!report) {
         return sendJSON(res, 404, { error: 'Report not found.' });
       }
-
-      console.log('Creating Stripe checkout session for report:', {
-        report_id: report.report_id,
-        email: report.email,
-        baseUrl: BASE_URL
-      });
 
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -665,96 +630,68 @@ http.createServer(async (req, res) => {
       console.error('Stripe checkout session error:', {
         type: err.type,
         code: err.code,
-        message: err.message,
-        raw: err.raw ? {
-          message: err.raw.message,
-          code: err.raw.code,
-          type: err.raw.type
-        } : null
+        message: err.message
       });
 
       return sendJSON(res, 500, {
         error: err.message,
         stripe_type: err.type || null,
-        stripe_code: err.code || null,
-        stripe_raw_message: err.raw && err.raw.message ? err.raw.message : null
+        stripe_code: err.code || null
       });
     }
   }
 
-  if (req.method === 'POST' && req.url === '/fulfill-report') {
+  if (req.method === 'POST' && req.url === '/stripe-webhook') {
     try {
       if (!stripe) {
-        return sendJSON(res, 500, {
-          error: 'Stripe is not configured. Add STRIPE_SECRET_KEY in Render environment variables and redeploy.'
-        });
+        res.writeHead(500);
+        res.end('Stripe is not configured.');
+        return;
       }
 
-      const makeSecret = req.headers['x-make-secret'];
-
-      if (!process.env.MAKE_SHARED_SECRET || makeSecret !== process.env.MAKE_SHARED_SECRET) {
-        return sendJSON(res, 401, { error: 'Unauthorized.' });
+      if (!process.env.STRIPE_WEBHOOK_SECRET) {
+        res.writeHead(500);
+        res.end('STRIPE_WEBHOOK_SECRET is not configured.');
+        return;
       }
 
-      const body = await readJSONBody(req);
-      const report_id = body.report_id;
-      const stripe_session_id = body.stripe_session_id;
+      const sig = req.headers['stripe-signature'];
+      const rawBody = await readRawBody(req);
 
-      if (!report_id || !stripe_session_id) {
-        return sendJSON(res, 400, { error: 'Missing required fields.' });
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(
+          rawBody,
+          sig,
+          process.env.STRIPE_WEBHOOK_SECRET
+        );
+      } catch (err) {
+        console.error('Webhook signature verification failed:', err.message);
+        res.writeHead(400);
+        res.end(`Webhook Error: ${err.message}`);
+        return;
       }
 
-      const session = await stripe.checkout.sessions.retrieve(stripe_session_id);
-
-      if (session.payment_status !== 'paid') {
-        return sendJSON(res, 400, { error: 'Payment not completed.' });
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        try {
+          await fulfillPaidReport(session.id);
+        } catch (err) {
+          console.error('Fulfillment error:', err.message);
+          res.writeHead(500);
+          res.end(`Fulfillment Error: ${err.message}`);
+          return;
+        }
       }
 
-      const reports = readReports();
-      const report = reports.find(r => r.report_id === report_id);
-
-      if (!report) {
-        return sendJSON(res, 404, { error: 'Report not found.' });
-      }
-
-      if (report.status === 'fulfilled') {
-        return sendJSON(res, 200, { success: true, message: 'Already fulfilled.' });
-      }
-
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-
-      if (!apiKey) {
-        return sendJSON(res, 500, { error: 'ANTHROPIC_API_KEY is not configured.' });
-      }
-
-      const aiData = await callAnthropic(report.profile, apiKey);
-      const sections = parseSectionsFromAnthropic(aiData);
-      const dest = getDestMeta(report.profile.destination);
-      const fullHTML = generateHTML(report.profile, sections, dest, { full: true });
-
-      const outDir = path.join(__dirname, 'generated_reports');
-      fs.mkdirSync(outDir, { recursive: true });
-
-      const filename = `${report.report_id}.html`;
-      const filePath = path.join(outDir, filename);
-      fs.writeFileSync(filePath, fullHTML, 'utf8');
-
-      report.status = 'fulfilled';
-      report.fulfilled_at = new Date().toISOString();
-      report.stripe_session_id = stripe_session_id;
-      report.generated_file = `/generated_reports/${filename}`;
-      writeReports(reports);
-
-      return sendJSON(res, 200, {
-        success: true,
-        report_id: report.report_id,
-        email_to: report.email,
-        generated_file: report.generated_file,
-        note: 'Full report generated successfully. Email sending can be added next.'
-      });
+      res.writeHead(200);
+      res.end('ok');
     } catch (err) {
-      return sendJSON(res, 500, { error: err.message });
+      console.error('Stripe webhook error:', err.message);
+      res.writeHead(500);
+      res.end(err.message);
     }
+    return;
   }
 
   if (req.method === 'GET' && req.url.startsWith('/generated_reports/')) {
