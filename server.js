@@ -381,6 +381,12 @@ async function sendReportEmail(toEmail, firstName, reportUrl) {
     throw new Error('FROM_EMAIL is not configured.');
   }
 
+  console.log('Sending report email:', {
+    toEmail,
+    firstName,
+    reportUrl
+  });
+
   const response = await resend.emails.send({
     from: process.env.FROM_EMAIL,
     to: [toEmail],
@@ -405,6 +411,8 @@ async function sendReportEmail(toEmail, firstName, reportUrl) {
     `
   });
 
+  console.log('Resend response:', response);
+
   return response;
 }
 
@@ -413,6 +421,12 @@ async function fulfillPaidReport(checkoutSessionId) {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.');
 
   const session = await stripe.checkout.sessions.retrieve(checkoutSessionId);
+
+  console.log('Fulfillment retrieved Stripe session:', {
+    session_id: session.id,
+    payment_status: session.payment_status,
+    metadata: session.metadata
+  });
 
   if (session.payment_status !== 'paid') {
     throw new Error('Checkout session is not paid.');
@@ -431,6 +445,11 @@ async function fulfillPaidReport(checkoutSessionId) {
   }
 
   if (report.status === 'fulfilled' && report.generated_file) {
+    console.log('Report already fulfilled:', {
+      report_id: report.report_id,
+      generated_file: report.generated_file
+    });
+
     return {
       success: true,
       already_fulfilled: true,
@@ -439,6 +458,12 @@ async function fulfillPaidReport(checkoutSessionId) {
       generated_file: report.generated_file
     };
   }
+
+  console.log('Generating full report for:', {
+    report_id: report.report_id,
+    email: report.email,
+    name: report.name
+  });
 
   const aiData = await callAnthropic(report.profile, process.env.ANTHROPIC_API_KEY);
   const sections = parseSectionsFromAnthropic(aiData);
@@ -464,6 +489,12 @@ async function fulfillPaidReport(checkoutSessionId) {
   report.email_id = emailResult && emailResult.data ? emailResult.data.id : null;
 
   writeReports(reports);
+
+  console.log('Fulfillment completed successfully:', {
+    report_id: report.report_id,
+    email_to: report.email,
+    generated_file: report.generated_file
+  });
 
   return {
     success: true,
@@ -500,6 +531,7 @@ http.createServer(async (req, res) => {
       if (!stripe) {
         return sendJSON(res, 500, { ok: false, error: 'Stripe is not configured' });
       }
+
       const balance = await stripe.balance.retrieve();
       return sendJSON(res, 200, { ok: true, object: balance.object });
     } catch (err) {
@@ -569,6 +601,14 @@ http.createServer(async (req, res) => {
       });
 
       writeReports(reports);
+
+      console.log('Saved report record:', {
+        report_id,
+        name,
+        email,
+        destinationName
+      });
+
       return sendJSON(res, 200, { report_id });
     } catch (err) {
       return sendJSON(res, 500, { error: err.message });
@@ -597,6 +637,12 @@ http.createServer(async (req, res) => {
         return sendJSON(res, 404, { error: 'Report not found.' });
       }
 
+      console.log('Creating checkout session with metadata:', {
+        report_id: report.report_id,
+        email: report.email,
+        name: report.name
+      });
+
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         customer_email: report.email,
@@ -619,6 +665,11 @@ http.createServer(async (req, res) => {
           email: report.email,
           name: report.name
         }
+      });
+
+      console.log('Stripe checkout session created:', {
+        session_id: session.id,
+        metadata: session.metadata
       });
 
       report.stripe_checkout_created_at = new Date().toISOString();
@@ -672,8 +723,19 @@ http.createServer(async (req, res) => {
         return;
       }
 
+      console.log('Stripe webhook received:', {
+        event_type: event.type,
+        event_id: event.id
+      });
+
       if (event.type === 'checkout.session.completed') {
         const session = event.data.object;
+
+        console.log('Webhook checkout.session.completed received:', {
+          session_id: session.id,
+          metadata: session.metadata
+        });
+
         try {
           await fulfillPaidReport(session.id);
         } catch (err) {
