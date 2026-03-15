@@ -187,9 +187,11 @@ function callAnthropic(profile, apiKey) {
 
     const anthropicReq = https.request(options, anthropicRes => {
       let data = '';
+
       anthropicRes.on('data', chunk => {
         data += chunk;
       });
+
       anthropicRes.on('end', () => {
         try {
           resolve(JSON.parse(data));
@@ -236,20 +238,6 @@ function parseSectionsFromAnthropic(data) {
   return parsed.sections;
 }
 
-function formatContent(content) {
-  if (!content) return '<p>Content unavailable.</p>';
-  const paras = content.split(/\n\n+/).filter(p => p.trim());
-  return (paras.length ? paras : [content])
-    .map(p => '<p>' + p.trim() + '</p>')
-    .join('\n');
-}
-
-function teaserContent(content) {
-  if (!content) return '';
-  const sentences = content.match(/[^.!?]+[.!?]+/g) || [];
-  return sentences.slice(0, 2).join(' ').trim();
-}
-
 function generateHTML(profile, sections, dest, opts = {}) {
   const today = new Date().toLocaleDateString('en-US', {
     year: 'numeric',
@@ -260,116 +248,484 @@ function generateHTML(profile, sections, dest, opts = {}) {
   const FREE_SECTIONS = opts.full ? sections.length : 3;
   const icons = ['👤', '💰', '📍', '💼', '📊', '🏠', '⚖️', '🌪️', '🤝', '📋', '❓', '📌'];
 
+  const coverImages = {
+    Florida: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1400&q=80',
+    'The Carolinas': 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1400&q=80',
+    Tennessee: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1400&q=80',
+    Texas: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1400&q=80',
+    Arizona: 'https://images.unsplash.com/photo-1500534623283-312aade485b7?w=1400&q=80',
+    Delaware: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=1400&q=80'
+  };
+
+  const lifestyleImages = [
+    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=1200&q=80',
+    'https://images.unsplash.com/photo-1460317442991-0ec209397118?w=1200&q=80',
+    'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80',
+    'https://images.unsplash.com/photo-1494526585095-c41746248156?w=1200&q=80'
+  ];
+
+  const coverImage = coverImages[dest.name] || 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1400&q=80';
+
+  function formatParagraphs(text) {
+    if (!text) return '<p>Content unavailable.</p>';
+
+    return text
+      .split(/\n\n+/)
+      .filter(Boolean)
+      .map(p => `<p>${p.trim()}</p>`)
+      .join('');
+  }
+
+  function teaserContent(content) {
+    if (!content) return '';
+    const sentences = content.match(/[^.!?]+[.!?]+/g) || [];
+    return sentences.slice(0, 2).join(' ').trim();
+  }
+
   const sectionsHTML = sections.map((sec, i) => {
     const isFree = i < FREE_SECTIONS;
+    const img = lifestyleImages[i % lifestyleImages.length];
 
     if (isFree) {
       return `
-      <div class="section">
-        <div class="section-header">
-          <span class="section-icon">${icons[i] || '📄'}</span>
-          <h2>${sec.title}</h2>
-          ${opts.full ? '<span class="free-badge">FULL</span>' : '<span class="free-badge">FREE</span>'}
-        </div>
-        <div class="section-content">${formatContent(sec.content)}</div>
-      </div>`;
+        <section class="report-section">
+          <div class="section-header">
+            <div class="section-icon">${icons[i] || '📄'}</div>
+            <div class="section-title-wrap">
+              <h2>${sec.title}</h2>
+              <div class="section-badge">${opts.full ? 'Full Access' : 'Free Preview'}</div>
+            </div>
+          </div>
+
+          <img class="section-image" src="${img}" alt="${sec.title}" />
+
+          <div class="section-content">
+            ${formatParagraphs(sec.content)}
+          </div>
+        </section>
+      `;
     }
 
     const teaser = teaserContent(sec.content);
 
     return `
-    <div class="section section-locked">
-      <div class="section-header">
-        <span class="section-icon">${icons[i] || '📄'}</span>
-        <h2>${sec.title}</h2>
-        <span class="locked-badge">🔒 LOCKED</span>
-      </div>
-      <div class="section-content">
-        <p class="teaser-text">${teaser}</p>
-        <div class="blur-overlay"></div>
-        <div class="lock-screen">
-          <div class="lock-icon">🔒</div>
-          <div class="lock-title">Upgrade to Unlock This Section</div>
-          <div class="lock-copy">Your complete Blueprint includes all 12 sections, custom action steps, and deeper destination guidance.</div>
+      <section class="report-section locked-section">
+        <div class="section-header">
+          <div class="section-icon">${icons[i] || '📄'}</div>
+          <div class="section-title-wrap">
+            <h2>${sec.title}</h2>
+            <div class="locked-badge">🔒 Locked</div>
+          </div>
         </div>
-      </div>
-    </div>`;
-  }).join('\n');
 
-  const previewBanner = opts.full ? '' : `
-  <div class="preview-banner">
-    <div class="preview-pill">FREE PREVIEW</div>
-    <div class="preview-title">You’re viewing the first 3 sections of your personalized Blueprint.</div>
-    <div class="preview-sub">Upgrade to unlock all 12 sections, including your budget scenarios, home transition paths, legal/tax guide, weather risks, cultural fit, and action plan.</div>
-  </div>`;
+        <div class="section-content locked-content">
+          <p>${teaser}</p>
+          <div class="locked-overlay">
+            <div class="locked-card">
+              <div class="locked-icon">🔒</div>
+              <h3>Unlock Your Full Blueprint</h3>
+              <p>This section is included in the paid report along with your full relocation strategy, budget planning, and action plan.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }).join('');
 
-  const upgradeStrip = opts.full ? '' : `
-  <div class="upgrade-strip">
-    <h3>Unlock Your Complete Blueprint</h3>
-    <p>You've seen what's possible. Your full report includes 9 more sections of personalized research — everything you need to make a confident, informed decision about your retirement move.</p>
-    <div class="upgrade-price">$49</div>
-  </div>`;
-
-  return `<!DOCTYPE html>
+  return `
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Retirement Relocation Blueprint</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; background: #f5f3ef; color: #1f2937; }
-  .cover { background: linear-gradient(135deg, #0f2027, #2c5364); color: white; padding: 60px 40px; }
-  .cover h1 { font-size: 48px; margin-bottom: 12px; }
-  .cover-sub { font-size: 18px; max-width: 720px; line-height: 1.6; margin-bottom: 24px; }
-  .preview-banner { background: #fff6dd; padding: 20px 24px; text-align: center; }
-  .preview-pill { display: inline-block; background: #f7b733; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
-  .preview-title { font-size: 28px; font-weight: bold; margin-bottom: 8px; }
-  .preview-sub { font-size: 15px; color: #555; }
-  .content { padding: 24px; max-width: 960px; margin: 0 auto; }
-  .section { background: white; border-radius: 20px; padding: 28px; margin-bottom: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
-  .section-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-  .section-icon { font-size: 24px; }
-  .section-header h2 { font-size: 28px; flex: 1; }
-  .free-badge, .locked-badge { font-size: 11px; font-weight: bold; padding: 8px 12px; border-radius: 999px; }
-  .free-badge { background: #e8f8e8; color: #2e7d32; }
-  .locked-badge { background: #fef2f2; color: #b91c1c; }
-  .section-content p { line-height: 1.8; margin-bottom: 12px; }
-  .section-locked { position: relative; overflow: hidden; }
-  .teaser-text { color: #4b5563; }
-  .blur-overlay { position: absolute; inset: 40px 0 0 0; background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.96) 40%, rgba(255,255,255,1)); backdrop-filter: blur(5px); }
-  .lock-screen { position: absolute; left: 0; right: 0; bottom: 0; padding: 28px 18px 12px; text-align: center; }
-  .lock-icon { font-size: 34px; margin-bottom: 8px; }
-  .lock-title { font-size: 22px; font-weight: bold; margin-bottom: 8px; }
-  .lock-copy { color: #666; }
-  .upgrade-strip { background: linear-gradient(135deg, #0f2027, #2c5364); color: white; text-align: center; padding: 42px 24px; }
-  .upgrade-price { color: #f7b733; font-size: 44px; font-weight: bold; margin-top: 12px; }
-  .report-footer { background: #0f2027; color: rgba(255,255,255,0.8); padding: 24px; font-size: 12px; line-height: 1.8; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retirement Relocation Blueprint</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: #f4f1ec;
+      color: #1f2937;
+      line-height: 1.7;
+    }
+
+    .page-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #fffaf4;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+    }
+
+    .hero {
+      position: relative;
+      min-height: 460px;
+      color: white;
+      padding: 56px 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      background:
+        linear-gradient(rgba(12, 32, 43, 0.45), rgba(12, 32, 43, 0.78)),
+        url('${coverImage}') center/cover no-repeat;
+    }
+
+    .hero-badge {
+      position: absolute;
+      top: 32px;
+      left: 48px;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      backdrop-filter: blur(6px);
+    }
+
+    .hero h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 52px;
+      line-height: 1.05;
+      margin: 0 0 14px 0;
+      max-width: 700px;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .hero-chip {
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.18);
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 14px;
+      backdrop-filter: blur(4px);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      padding: 28px 32px;
+      background: #0f2027;
+      color: white;
+    }
+
+    .summary-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .summary-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 8px;
+    }
+
+    .summary-value {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .intro-banner {
+      margin: 28px 32px 0;
+      padding: 22px 24px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #fff4d8, #fbe7bf);
+      border: 1px solid #edd6a0;
+    }
+
+    .intro-banner h3 {
+      margin: 0 0 8px 0;
+      font-size: 24px;
+      font-family: 'Playfair Display', serif;
+      color: #5a3d00;
+    }
+
+    .intro-banner p {
+      margin: 0;
+      color: #6b4f1d;
+    }
+
+    .content {
+      padding: 28px 32px 40px;
+    }
+
+    .report-section {
+      background: white;
+      border-radius: 24px;
+      border: 1px solid #eee4d7;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+      padding: 28px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+
+    .section-header {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .section-icon {
+      width: 52px;
+      height: 52px;
+      min-width: 52px;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f2027, #2c5364);
+      color: white;
+      font-size: 24px;
+    }
+
+    .section-title-wrap {
+      flex: 1;
+    }
+
+    .section-title-wrap h2 {
+      margin: 0 0 8px 0;
+      font-family: 'Playfair Display', serif;
+      font-size: 32px;
+      color: #152531;
+      line-height: 1.2;
+    }
+
+    .section-badge,
+    .locked-badge {
+      display: inline-block;
+      padding: 7px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .section-badge {
+      background: #e9f7ef;
+      color: #147a4f;
+    }
+
+    .locked-badge {
+      background: #fff1f2;
+      color: #b42318;
+    }
+
+    .section-image {
+      width: 100%;
+      height: 250px;
+      object-fit: cover;
+      border-radius: 18px;
+      margin-bottom: 18px;
+    }
+
+    .section-content p {
+      margin: 0 0 16px 0;
+      font-size: 16px;
+      color: #374151;
+    }
+
+    .locked-section {
+      position: relative;
+    }
+
+    .locked-content {
+      position: relative;
+      min-height: 180px;
+      overflow: hidden;
+    }
+
+    .locked-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: end;
+      justify-content: center;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.15), rgba(255,255,255,0.92) 50%, rgba(255,255,255,1));
+      padding: 24px;
+    }
+
+    .locked-card {
+      background: white;
+      border-radius: 20px;
+      padding: 22px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+      border: 1px solid #eadfce;
+      text-align: center;
+    }
+
+    .locked-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .locked-card h3 {
+      margin: 0 0 10px 0;
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      color: #1f2937;
+    }
+
+    .locked-card p {
+      margin: 0;
+      color: #6b7280;
+      font-size: 15px;
+    }
+
+    .footer {
+      background: #10212c;
+      color: rgba(255,255,255,0.86);
+      padding: 28px 32px 36px;
+    }
+
+    .footer h4 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      font-family: 'Playfair Display', serif;
+      color: #f3c66b;
+    }
+
+    .footer p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    @media (max-width: 768px) {
+      .hero {
+        padding: 40px 24px;
+        min-height: 380px;
+      }
+
+      .hero-badge {
+        left: 24px;
+        top: 24px;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .summary-grid,
+      .content,
+      .footer {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+
+      .intro-banner {
+        margin-left: 20px;
+        margin-right: 20px;
+      }
+
+      .section-title-wrap h2 {
+        font-size: 26px;
+      }
+
+      .section-image {
+        height: 200px;
+      }
+    }
+
+    @media print {
+      body {
+        background: white;
+      }
+
+      .page-wrap {
+        box-shadow: none;
+      }
+    }
+  </style>
 </head>
 <body>
-<div class="cover">
-  <h1>Prepared for ${profile.firstName}</h1>
-  <div class="cover-sub">
-    A personalized relocation guide for a Northeast retiree evaluating <strong>${dest.name}</strong>,
-    with practical savings estimates, risks, cultural differences, and next-step planning.
+  <div class="page-wrap">
+    <section class="hero">
+      <div class="hero-badge">Retirement Relocation Blueprint</div>
+      <h1>Prepared for ${profile.firstName}</h1>
+      <p>
+        A personalized relocation guide for a Northeast retiree evaluating <strong>${dest.name}</strong>,
+        with practical savings estimates, lifestyle factors, and planning guidance.
+      </p>
+      <div class="hero-meta">
+        <div class="hero-chip">📍 Destination: ${dest.name}</div>
+        <div class="hero-chip">📅 Prepared: ${today}</div>
+        <div class="hero-chip">👤 Client: ${profile.firstName}</div>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      <div class="summary-card">
+        <div class="summary-label">Top Cities</div>
+        <div class="summary-value">${dest.cities}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Potential Monthly Savings</div>
+        <div class="summary-value">${dest.savings}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Potential Tax Advantage</div>
+        <div class="summary-value">${dest.tax}</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">Timeline</div>
+        <div class="summary-value">${profile.timeline || 'To be determined'}</div>
+      </div>
+    </section>
+
+    <section class="intro-banner">
+      <h3>Your Personalized Retirement Blueprint</h3>
+      <p>
+        This report is designed to help you compare destinations, understand costs and tradeoffs,
+        and move toward a smarter retirement relocation decision with clarity and confidence.
+      </p>
+    </section>
+
+    <main class="content">
+      ${sectionsHTML}
+    </main>
+
+    <footer class="footer">
+      <h4>Educational Disclaimer</h4>
+      <p>
+        This blueprint is generated for general informational purposes only and is not financial, legal,
+        tax, or investment advice. Always consult qualified professionals before making major decisions
+        regarding retirement, relocation, taxes, real estate, or healthcare planning.
+      </p>
+    </footer>
   </div>
-  <div>Prepared ${today}</div>
-</div>
-
-${previewBanner}
-
-<div class="content">
-  ${sectionsHTML}
-</div>
-
-${upgradeStrip}
-
-<div class="report-footer">
-  <strong>Educational Disclaimer:</strong> This blueprint is generated for general informational purposes only and is not financial, legal, tax, or investment advice.
-</div>
 </body>
-</html>`;
+</html>
+  `;
 }
 
 async function sendReportEmail(toEmail, firstName, reportUrl) {
